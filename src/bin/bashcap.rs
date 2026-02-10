@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use mb_resolver::utilprog::bashcap::{spec, model};
+use mb_resolver::utilprog::bashcap::{spec, model, doc};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -12,6 +12,7 @@ fn main() {
     if args.is_empty() {
         eprintln!("usage: bashcap [--output=<path>] [bash-args...]");
         eprintln!("       bashcap polyfill");
+        eprintln!("       bashcap --help-full");
         eprintln!();
         eprintln!("Transparent bash wrapper. All args after bashcap's own flags");
         eprintln!("are passed directly to bash. Injection via BASH_ENV.");
@@ -21,6 +22,12 @@ fn main() {
     // Subcommand: polyfill
     if args[0] == "polyfill" {
         print!("{}", spec::POLYFILL);
+        return;
+    }
+
+    // --help-full: print full user guide
+    if args[0] == "--help-full" {
+        print!("{}", doc::HELP_FULL);
         return;
     }
 
