@@ -5,6 +5,8 @@ use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use mb_resolver::utilprog::bashcap::{spec, model, doc};
+use mb_resolver::utilprog::bashcap::spec::BASHCAP_TAG;
+use mb_resolver::bash::instrumentation::find_with_prefix;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -56,11 +58,11 @@ fn main() {
             process::exit(1);
         });
 
-    // Convert __SNAP__-tagged captured calls to BashCapEntry
-    let snap_calls = result.calls.get(&["__SNAP__"]);
+    // Filter to bashcap-tagged rows; ignore anything else in the shared accumulator.
+    let snap_rows = find_with_prefix(&result.rows, &[BASHCAP_TAG]);
     let mut entries = Vec::new();
-    for (i, call) in snap_calls.iter().enumerate() {
-        match model::parse_commandlist(&call.commandlist) {
+    for (i, row) in snap_rows.iter().enumerate() {
+        match model::parse_commandlist(row) {
             Ok(entry) => entries.push(entry),
             Err(e) => eprintln!("bashcap: warning: snap {}: {e}", i + 1),
         }
