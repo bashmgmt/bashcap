@@ -135,10 +135,38 @@ them without asking. See [capture.md](capture.md).
 ## The command line
 
 ```rust
-BashCap.capture_into::<Snapshot>(&argv, &into)
+let mut bashcap = BashCap::writing(File::create(into)?);
+let status = bashcap.run(argv)?;
 ```
 
-That is the whole of `run`. Three rules, all the same rule:
+`BashCap` decodes and writes in `heard`, so a snapshot reaches the file as it
+arrives rather than when the run ends. Resident memory does not track the
+capture:
+
+| snapshots | peak RSS | output |
+|---:|---:|---:|
+| 200 | 7.7 MB | 0.19 MB |
+| 2 000 | 7.8 MB | 1.9 MB |
+| 20 000 | 7.5 MB | 18.9 MB |
+
+The core carries no serialisation, so bashcap declares its own output row —
+the wrapper owns its format, provenance included:
+
+```rust
+#[derive(Serialize)]
+struct Row<'a> {
+    at: u64,
+    pid: u32,
+    seq: u32,
+    #[serde(flatten)]
+    snapshot: &'a Snapshot,
+}
+```
+
+Lines are written in **arrival** order rather than sorted by stamp. Each
+carries its own `at`, so ordering downstream is exact and is `sort`'s job.
+
+Three rules, all the same rule:
 
 - **`--into` is required.** A wrapper must not guess where to write.
 - **Nothing goes to stderr** unless `--verbose` is passed. stderr belongs to
@@ -187,5 +215,5 @@ child process because the prelude re-runs there via `BASH_ENV`.
 ## See also
 
 - [source.md](source.md) — where a tool's bash lives
-- [run.md](run.md#a-tool-as-one-function) — `capture_into`
+- [run.md](run.md#a-rig-is-three-functions) — the trait it implements
 - `src/utilprog/bashcap/tests.rs` — one run covering every section
