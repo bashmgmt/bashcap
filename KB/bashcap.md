@@ -41,35 +41,42 @@ it snapshots, runs the continuation, and returns *its* status.
 ## The rig
 
 ```rust
-pub struct BashCap;
+pub struct BashCap  { into: PathBuf }                             // description
+pub struct Capturing { pub written: usize, sink: BufWriter<File> } // one run
+pub struct Report    { pub written: usize, pub status: ExitStatus }
 
 impl Rig for BashCap {
-    fn setup(&self) -> Setup {
-        Setup::new().bash(SRC.read().unwrap_or_else(|error| panic!("{error}")))
+    type Session = Capturing;
+    type Output = Report;
+
+    fn start(&self) -> Result<(Setup, Capturing), RigError> { /* creates the file */ }
+    fn heard(&self, session: &mut Capturing, said: Line) -> Result<(), RigError> { /* writes */ }
+
+    /// bashcap only listens; asking it something gets 127.
+    fn answer(&self, _: &mut Capturing, _: &Turn) -> Result<Reply, RigError> {
+        Ok(Reply::status(127))
     }
 
-    /// bashcap only listens. A script that asks it something gets a status
-    /// saying nobody was there to answer.
-    fn answer(&mut self, _turn: &Turn) -> Reply {
-        Reply::status(127)
+    fn ended(&self, mut session: Capturing, status: ExitStatus) -> Result<Report, RigError> {
+        session.sink.flush().doing(|| self.writing_to())?;
+        Ok(Report { written: session.written, status })
     }
 }
 ```
 
-That is all the Rust there is on the bash side. Everything bashcap *does* is in
-`bash/bashcap/bashcap.bash`, including `WITH_BASHCAP`, which is a bash idiom
-and belongs in bash. The snapshot ends:
+Describing bashcap opens nothing; `start` creates the file, `heard` writes each
+snapshot as it arrives, and `ended` flushes — so a failed flush is reported
+rather than lost. That is all the Rust there is on the bash side. Everything
+bashcap *does* is in `bash/bashcap/bashcap.bash`, including `WITH_BASHCAP`,
+which is a bash idiom and belongs in bash. The snapshot ends:
 
 ```bash
-declare -a __bc_rec=(
-    __BASHCAP__
-    frames  "(${__bc_frames[*]@Q})"
-    state   "(${__bc_state[*]@Q})"
-    rematch "(${__bc_rematch[*]@Q})"
-    vars    "(${__bc_declared[*]@Q})"
-    notes   "(${__bc_notes[*]@Q})"
-)
-BC_INSTR say "${__bc_rec[@]}"
+    BC_INSTR say __BASHCAP__ \
+        frames  "(${__bc_frames[*]@Q})" \
+        state   "(${__bc_state[*]@Q})" \
+        rematch "(${__bc_rematch[*]@Q})" \
+        vars    "(${__bc_declared[*]@Q})" \
+        notes   "(${__bc_notes[*]@Q})"
 ```
 
 Each section is a **nested array literal**, so the message keeps its structure
@@ -135,9 +142,12 @@ them without asking. See [capture.md](capture.md).
 ## The command line
 
 ```rust
-let mut bashcap = BashCap::writing(File::create(into)?);
-let status = bashcap.run(argv)?;
+let report = BashCap::writing(into).run(argv)?;
 ```
+
+`BashCap { into }` is the description and opens nothing; `start` creates the
+file, `Capturing` holds the sink, and `ended` flushes it — so a failed flush is
+reported rather than lost in a `Drop`.
 
 `BashCap` decodes and writes in `heard`, so a snapshot reaches the file as it
 arrives rather than when the run ends. Resident memory does not track the
