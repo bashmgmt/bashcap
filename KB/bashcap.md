@@ -3,8 +3,8 @@
 `src/utilprog/bashcap/`, with its bash in `bash/bashcap/`
 
 A transparent bash wrapper that records the full state of a running shell at
-every `BASHCAP` call site. It is the reference consumer of the rig: one
-instrument, one decoder, and a command line that is one call.
+every `BASHCAP` call site. It is the reference consumer of the rig: one bash
+file, one decoder, and a command line that is one call.
 
 ```
 bashcap run --into FILE [--] <bash args…>   capture into FILE, one snapshot per line
@@ -38,15 +38,16 @@ named `BASHCAP__CTX__*` is captured automatically, which is how ambient context
 rides along without being named at each site. `WITH_BASHCAP` is the CPS form:
 it snapshots, runs the continuation, and returns *its* status.
 
-## The instrument
+## The bash
 
 ```rust
-pub fn bashcap() -> Instrument;
+pub fn bashcap() -> BashSrc;                                     // reads the file below
 pub const POLYFILL: Asset = Asset::new("bashcap/polyfill.bash");
 ```
 
-Forty lines, and most of them are the argument loop for `WITH_BASHCAP`. The
-snapshot itself lives in `bash/bashcap/bashcap.bash` with one hole:
+Ten lines of Rust, all of it reading a file. Everything bashcap does is in
+`bash/bashcap/bashcap.bash`, including `WITH_BASHCAP`, which is a bash idiom
+and belongs in bash. The snapshot ends:
 
 ```bash
 declare -a __bc_rec=(
@@ -57,13 +58,12 @@ declare -a __bc_rec=(
     vars    "(${__bc_declared[*]@Q})"
     notes   "(${__bc_notes[*]@Q})"
 )
-@@EMIT@@
+BC_INSTR say "${__bc_rec[@]}"
 ```
 
 Each section is a **nested array literal**, so the message keeps its structure
-all the way to Rust instead of being flattened behind sentinels. `@@EMIT@@` is
-filled with `codegen.emit("__bc_rec")`; the instrument never sees the
-descriptor it writes to. See [codegen.md](codegen.md#the-guard).
+all the way to Rust instead of being flattened behind sentinels. The last line
+is the whole of how it reaches the wire.
 
 Two details in the bash worth knowing:
 
@@ -73,8 +73,8 @@ declare -- IFS=' '
 
 Function-scoped, because the sections above are joined with `[*]` and a client
 that had set `IFS` would otherwise collapse each one into a single word. The
-envelope is safe without this — `Codegen` uses `printf` — but these nested
-joins are the instrument's own.
+envelope is safe without this — `__bc_pack` uses `printf` — but these nested
+joins are bashcap's own.
 
 ```bash
 declare -n __bc_ref="$__bc_name"
@@ -124,7 +124,7 @@ them without asking. See [capture.md](capture.md).
 ## The command line
 
 ```rust
-capture_into::<Snapshot>(&Rig::new().with(bashcap()), &argv, &into)
+capture_into::<Snapshot>(&Rig::new(Behaviour::new().speaking(bashcap())), &argv, &into)
 ```
 
 That is the whole of `run`. `--into` is required — a wrapper must not guess
@@ -169,6 +169,6 @@ child process because the prelude re-runs there via `BASH_ENV`.
 
 ## See also
 
-- [instrument.md](instrument.md) — the general shape this is one of
+- [source.md](source.md) — where a tool's bash lives
 - [run.md](run.md#a-tool-as-one-function) — `capture_into`
 - `src/utilprog/bashcap/tests.rs` — one run covering every section
