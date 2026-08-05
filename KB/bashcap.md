@@ -138,11 +138,17 @@ them without asking. See [capture.md](capture.md).
 BashCap.capture_into::<Snapshot>(&argv, &into)
 ```
 
-That is the whole of `run`. `--into` is required — a wrapper must not guess
-where to write, and must not compete for the wrapped program's stdout. On
-completion one line goes to stderr saying how many snapshots went where
-(`--quiet` suppresses it), plus any `damage`, and the exit code is the
-subject's, via `ExitStatus::code()`.
+That is the whole of `run`. Three rules, all the same rule:
+
+- **`--into` is required.** A wrapper must not guess where to write.
+- **Nothing goes to stderr** unless `--verbose` is passed. stderr belongs to
+  the subject.
+- **The first plain word ends bashcap's options.** `bashcap run --into out
+  build.bash --into elsewhere` passes `--into elsewhere` to the script, where
+  it belongs. A flag bashcap does not know is an error rather than a guess, and
+  `--` takes a wrapped command that starts with a dash.
+
+The exit code is the subject's, via `ExitStatus::code()`.
 
 ## Playground
 
