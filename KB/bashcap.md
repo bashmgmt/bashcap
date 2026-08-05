@@ -38,14 +38,25 @@ named `BASHCAP__CTX__*` is captured automatically, which is how ambient context
 rides along without being named at each site. `WITH_BASHCAP` is the CPS form:
 it snapshots, runs the continuation, and returns *its* status.
 
-## The bash
+## The rig
 
 ```rust
-pub fn bashcap() -> BashSrc;                                     // reads the file below
-pub const POLYFILL: Asset = Asset::new("bashcap/polyfill.bash");
+pub struct BashCap;
+
+impl Rig for BashCap {
+    fn setup(&self) -> Setup {
+        Setup::new().bash(SRC.read().unwrap_or_else(|error| panic!("{error}")))
+    }
+
+    /// bashcap only listens. A script that asks it something gets a status
+    /// saying nobody was there to answer.
+    fn answer(&mut self, _turn: &Turn) -> Reply {
+        Reply::status(127)
+    }
+}
 ```
 
-Ten lines of Rust, all of it reading a file. Everything bashcap does is in
+That is all the Rust there is on the bash side. Everything bashcap *does* is in
 `bash/bashcap/bashcap.bash`, including `WITH_BASHCAP`, which is a bash idiom
 and belongs in bash. The snapshot ends:
 
@@ -124,7 +135,7 @@ them without asking. See [capture.md](capture.md).
 ## The command line
 
 ```rust
-capture_into::<Snapshot>(&Rig::new(Behaviour::new().speaking(bashcap())), &argv, &into)
+BashCap.capture_into::<Snapshot>(&argv, &into)
 ```
 
 That is the whole of `run`. `--into` is required — a wrapper must not guess
