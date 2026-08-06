@@ -53,7 +53,7 @@ BASHCAP() {
     )
 
     local -a __bc_rematch=()
-    if [[ -n ${BASH_REMATCH[@]+set} ]]; then
+    if [[ -n ${BASH_REMATCH[*]+set} ]]; then
         __bc_rematch=("${BASH_REMATCH[@]}")
     fi
 
@@ -84,7 +84,11 @@ WITH_BASHCAP() {
         esac
     done
 
-    BASHCAP "${__bc_flags[@]}"
+    # The guards the prelude defines are in scope here: this file is the
+    # rig's bash, sourced after it. A snapshot that could not be taken is a
+    # broken run, so it is forwarded rather than stepped over.
+    BASHCAP "${__bc_flags[@]}" || __BC_BAIL
+
     "$@"
     local __bc_rc=$?
     return "$__bc_rc"
