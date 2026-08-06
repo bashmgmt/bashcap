@@ -1,6 +1,6 @@
 # bashcap — the reference tool
 
-`src/utilprog/bashcap/`, with its bash in `bash/bashcap/`
+`src/utilprog/bashcap/`, bash included from beside the Rust
 
 A transparent bash wrapper that records the full state of a running shell at
 every `BASHCAP` call site. It is the reference consumer of the rig: one bash
@@ -67,7 +67,7 @@ impl Rig for BashCap {
 Describing bashcap opens nothing; `start` creates the file, `heard` writes each
 snapshot as it arrives, and `ended` flushes — so a failed flush is reported
 rather than lost. That is all the Rust there is on the bash side. Everything
-bashcap *does* is in `bash/bashcap/bashcap.bash`, including `WITH_BASHCAP`,
+bashcap *does* is in `src/utilprog/bashcap/bashcap.bash`, including `WITH_BASHCAP`,
 which is a bash idiom and belongs in bash. The snapshot ends:
 
 ```bash
