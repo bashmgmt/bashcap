@@ -15,8 +15,14 @@ mkdir -p "$WORK"
 hr "build"
 ( cd "$ROOT" && cargo build --bin bashcap ) || exit 1
 
-hr "polyfill (what a client script sources)"
-"$BIN" polyfill | tee "$(dirname "$FIXTURE")/polyfill.bash" | sed 's/^/   /'
+hr "polyfill (what a client script vendors)"
+"$BIN" polyfill | sed 's/^/   /'
+
+VENDORED="$(dirname "$FIXTURE")/polyfill.bash"
+if [[ -f $VENDORED ]] && ! "$BIN" polyfill | diff -q - "$VENDORED" >/dev/null; then
+    printf '   %s has drifted from what bashcap ships\n' "$VENDORED"
+    exit 1
+fi
 
 hr "run"
 "$BIN" run --into "$WORK/capture.jsonl" -- "$FIXTURE"
