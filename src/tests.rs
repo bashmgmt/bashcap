@@ -40,9 +40,9 @@ impl Rig for Decoding {
 
 fn capture(body: &str) -> Vec<Capture> {
     let temp = tempfile::tempdir().unwrap();
-    let (seen, _) = run(&Decoding, &["bash".into(), script(temp.path(), body).into_os_string()]).unwrap();
+    let ran = run(&Decoding, &["bash".into(), script(temp.path(), body).into_os_string()]).unwrap();
 
-    seen
+    ran.whole().unwrap().0
 }
 
 /// One run covering every section: frames with their call sites, typed
@@ -107,7 +107,11 @@ fn each_snapshot_is_written_as_it_arrives() {
     let into = temp.path().join("out.jsonl");
     let entry = script(temp.path(), "BASHCAP -BCS:one\nBASHCAP -BCS:two");
 
-    let (capturing, status) = run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()]).unwrap();
+    let (capturing, status) =
+        run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()])
+            .unwrap()
+            .whole()
+            .unwrap();
     assert_eq!(capturing.written, 2);
     assert_eq!(status, ExitStatus::Code(0));
 
@@ -185,7 +189,10 @@ fn a_written_capture_reads_back_whole() {
     let into = temp.path().join("out.jsonl");
     let entry = script(temp.path(), "shopt -s extdebug\nf() { BASHCAP -BCS:one; }\nf arg");
 
-    run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()]).unwrap();
+    run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()])
+        .unwrap()
+        .whole()
+        .unwrap();
 
     let text = std::fs::read_to_string(&into).unwrap();
     let read: Vec<Capture> =

@@ -114,11 +114,18 @@ fn capture(
         bashcap = bashcap.tracing_calls();
     }
 
-    let (capturing, status) = run(&bashcap, argv)?;
+    let ran = run(&bashcap, argv)?;
 
     if verbose {
-        eprintln!("bashcap: {} snapshots -> {}", capturing.written, into.display());
+        eprintln!("bashcap: {} snapshots -> {}", ran.session.written, into.display());
     }
 
-    Ok(status)
+    // The subject's own status either way: it was seen out even when the
+    // capture broke, and a wrapper that reported its own trouble as the
+    // subject's would not be transparent.
+    if let Some(why) = ran.failed {
+        eprintln!("bashcap: {why}");
+    }
+
+    Ok(ran.subject)
 }
