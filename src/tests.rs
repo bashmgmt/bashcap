@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use super::{BashCap, Snapshot, Value, BASH, POLYFILL};
-use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Pid, Rig};
+use super::{BashCap, Capture, Value, BASH, POLYFILL};
+use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig};
 
 /// A script that vendors the polyfill, as a shipped one would.
 fn script(temp: &Path, body: &str) -> PathBuf {
@@ -14,11 +14,11 @@ fn script(temp: &Path, body: &str) -> PathBuf {
 }
 
 /// bashcap's bash, decoded but not written, so assertions read typed
-/// snapshots rather than JSON. Every snapshot must decode.
+/// captures rather than JSON. Every snapshot must decode.
 struct Decoding;
 
 impl Rig for Decoding {
-    type Session = Vec<(Pid, Snapshot)>;
+    type Session = Vec<Capture>;
 
     fn bash(&self) -> String {
         BASH.to_string()
@@ -28,20 +28,20 @@ impl Rig for Decoding {
         Ok(Vec::new())
     }
 
-    fn hear(&self, snaps: &mut Self::Session, said: Line) -> Result<(), Failure> {
-        let Some(decoded) = Snapshot::of(&said) else { return Ok(()) };
+    fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Failure> {
+        let Some(decoded) = Capture::of(&said) else { return Ok(()) };
 
-        snaps.push((said.pid, decoded.doing(|| format!("a snapshot from pid {}", said.pid))?));
+        seen.push(decoded.doing(|| format!("a snapshot from pid {}", said.pid))?);
 
         Ok(())
     }
 }
 
-fn capture(body: &str) -> Vec<(Pid, Snapshot)> {
+fn capture(body: &str) -> Vec<Capture> {
     let temp = tempfile::tempdir().unwrap();
-    let (snaps, _) = run(&Decoding, &[script(temp.path(), body)]).unwrap();
+    let (seen, _) = run(&Decoding, &[script(temp.path(), body)]).unwrap();
 
-    snaps
+    seen
 }
 
 /// One run covering every section: frames with their call sites, typed
@@ -72,7 +72,7 @@ fn a_snapshot_carries_the_whole_shell_state() {
 
     assert_eq!(snaps.len(), 2);
 
-    let deep = &snaps[0].1;
+    let deep = &snaps[0].snapshot;
     let names: Vec<&str> = deep.frames.iter().map(|frame| frame.funcname.as_str()).collect();
     assert_eq!(names, ["inner", "outer", "main"]);
     assert!(deep.frames[0].source.ends_with("main.bash"));
@@ -93,7 +93,7 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert_eq!(deep.notes, ["deep"]);
     assert!(deep.state.contains_key("shlvl") && deep.state.contains_key("flags"));
 
-    let wrapped = &snaps[1].1;
+    let wrapped = &snaps[1].snapshot;
     assert_eq!(wrapped.frames[0].funcname, "WITH_BASHCAP");
     assert_eq!(wrapped.notes, ["before step"]);
 }
@@ -138,4 +138,58 @@ fn neither_half_exports_a_name() {
             assert!(!line.contains("export "), "{whose}: {line}");
         }
     }
+}
+
+/// A subject that traces its own calls gets each frame's arguments, and one
+/// that does not gets `None` rather than an empty list. bashcap never enables
+/// `extdebug` itself: from `BASH_ENV` that means "start the debugger", and it
+/// makes ERR and DEBUG traps inherited by subshells.
+#[test]
+fn call_arguments_arrive_where_the_shell_was_recording_them() {
+    let body = r#"
+        deep() { BASHCAP -BCS:"at the bottom"; }
+        mid()  { deep "d one" $'d\ntwo'; }
+        mid "m one"
+        "#;
+
+    let bare = capture(body);
+    assert!(
+        bare[0].snapshot.frames.iter().all(|frame| frame.args.is_none()),
+        "an ordinary shell records none, and says so"
+    );
+
+    let traced = capture(&format!("shopt -s extdebug\n{body}"));
+    let called: Vec<&[String]> = traced[0]
+        .snapshot
+        .frames
+        .iter()
+        .map(|frame| frame.args.as_deref().expect("the shell was recording"))
+        .collect();
+
+    // `BASHCAP`'s own frame is not reported, but its flags still sit in the
+    // flat `BASH_ARGV` stack; miscounting them would shift every frame.
+    assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
+
+    // Rendered as the bash that would pass them, newline and all.
+    let shown = traced[0].snapshot.frames[0].to_string();
+    assert!(shown.ends_with(" ('d one' $'d\\ntwo')"), "{shown}");
+}
+
+/// What `run` writes, `show` reads: the rendering a library caller gets is
+/// the one the command line prints.
+#[test]
+fn a_written_capture_reads_back_whole() {
+    let temp = tempfile::tempdir().unwrap();
+    let into = temp.path().join("out.jsonl");
+    let entry = script(temp.path(), "shopt -s extdebug\nf() { BASHCAP -BCS:one; }\nf arg");
+
+    run(&BashCap::writing(&into), &[entry]).unwrap();
+
+    let text = std::fs::read_to_string(&into).unwrap();
+    let read: Vec<Capture> =
+        text.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+
+    assert_eq!(read.len(), 1);
+    assert_eq!(read[0].snapshot.frames[0].args.as_deref(), Some(["arg".to_string()].as_slice()));
+    assert!(read[0].to_string().contains("f@main.bash"), "{}", read[0]);
 }

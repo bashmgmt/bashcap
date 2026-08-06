@@ -12,14 +12,34 @@ BASHCAP() {
         esac
     done
 
+    # Bash records call arguments only under `extdebug`, which this never
+    # turns on: from BASH_ENV that means "start the debugger", and it makes
+    # ERR and DEBUG traps inherited. A subject already tracing gets them for
+    # free. Equal lengths is the test, not `shopt -q`: enabling extdebug
+    # part-way leaves BASH_ARGC short, and short means misattributed.
+    local __bc_traced=no
+    (( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )) && __bc_traced=yes
+
     local -a __bc_frames=()
-    local -i __bc_i
+    local -i __bc_i __bc_argc __bc_j
+    local -i __bc_at=${BASH_ARGC[0]:-0}     # step over BASHCAP's own flags
     for (( __bc_i = 1; __bc_i < ${#FUNCNAME[@]}; __bc_i++ )); do
         local -a __bc_frame=(
             "${FUNCNAME[__bc_i]}"
             "${BASH_SOURCE[__bc_i]}"
             "${BASH_LINENO[__bc_i - 1]}"
         )
+
+        if [[ $__bc_traced == yes ]]; then
+            # BASH_ARGV is one flat stack, innermost frame first, and each
+            # frame's own arguments run backwards within it.
+            __bc_argc=${BASH_ARGC[__bc_i]}
+            for (( __bc_j = __bc_argc; __bc_j > 0; __bc_j-- )); do
+                __bc_frame+=("${BASH_ARGV[__bc_at + __bc_j - 1]}")
+            done
+            (( __bc_at += __bc_argc ))
+        fi
+
         __bc_frames+=("(${__bc_frame[*]@Q})")
     done
 
@@ -47,6 +67,7 @@ BASHCAP() {
     done
 
     BC_INSTR say __BASHCAP__ \
+        traced  "$__bc_traced" \
         frames  "(${__bc_frames[*]@Q})" \
         state   "(${__bc_state[*]@Q})" \
         rematch "(${__bc_rematch[*]@Q})" \

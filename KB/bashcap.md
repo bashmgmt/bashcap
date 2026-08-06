@@ -18,8 +18,13 @@ between.
 
 ```
 bashcap run --into FILE [--verbose] [--] <bash args…>
+bashcap show FILE
 bashcap polyfill
 ```
+
+`show` renders a capture through `Capture`'s `Display`, which is the same
+text a library caller gets from `println!("{capture}")`. One rendering, in
+one place.
 
 ## The client's side
 
@@ -100,19 +105,68 @@ pub struct Snapshot {
     pub notes: Vec<String>,
 }
 
-pub struct Frame { pub funcname: String, pub source: String, pub lineno: u32 }
+pub struct Frame {
+    pub funcname: String,
+    pub source: String,
+    pub lineno: u32,
+
+    /// The call's arguments, when the shell was recording them. `None` is
+    /// "not recorded", never "called with none".
+    pub args: Option<Vec<String>>,
+}
+
 pub struct Captured { pub attrs: String, pub value: Value }
 pub enum Value { Scalar(String), Indexed(IndexMap<usize, String>), Assoc(IndexMap<String, String>) }
 
-impl Snapshot {
+/// One snapshot under the provenance the wire gave it — the output format,
+/// one per line, and what `show` reads back.
+pub struct Capture {
+    pub sent_at: u64, pub heard_at: u64, pub pid: u32, pub seq: u32,
+    pub snapshot: Snapshot,
+}
+
+impl Capture {
     /// `None` for a message that is not one of ours.
     pub fn of(line: &Line) -> Option<Result<Self, SnapshotError>>;
 }
 ```
 
+## Call arguments
+
+Bash records them only under `extdebug`, and **bashcap never turns it on**.
+Three reasons, each sufficient:
+
+- From `BASH_ENV` — the only injection point there is — `shopt -s extdebug`
+  means *start the debugger*. Bash warns on the subject's stderr, disables
+  debugging mode, and records nothing; where `bashdb` is installed it would
+  attach a debugger to the subject.
+- It implies `errtrace` and `functrace`, so a subject's own `ERR` and `DEBUG`
+  traps become inherited by subshells and functions. That is a change in the
+  subject's behaviour.
+- Turning it on part-way leaves `BASH_ARGC` shorter than `FUNCNAME`, so the
+  arguments that are there belong to the wrong frames.
+
+A subject that traces itself — `shopt -s extdebug` as its own first statement,
+or a `bashdb` session — gets them for free. The test is the alignment, not the
+option:
+
+```bash
+(( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )) && __bc_traced=yes
+```
+
+which is what "these arguments are trustworthy" actually means, and correctly
+rejects the part-way case. `BASH_ARGV` is one flat stack with the innermost
+frame first and each frame's arguments reversed within it; `BASHCAP`'s own
+frame is not reported but its flags still occupy the stack, so its `BASH_ARGC`
+must be stepped over or every frame shifts.
+
+`__fixtures/bashcap_demo/child.bash` traces itself, so one demo run shows both
+paths. Costs nothing when untraced; about +70 µs on a three-deep stack when
+traced, against a ~611 µs snapshot.
+
 Recognise, then decode — the shape every decoder in the crate takes. Decoding
 mirrors the assembly exactly: `flat` reads a section with `QuotedNest::words`,
-`nested` with `rows`, and `split_declaration` parses `declare -aX name=rhs`
+`nested` with `rows`, and `Declaration::read` parses `declare -aX name=rhs`
 back into a name, its attribute letters, and its value.
 
 Note what the snapshot does **not** carry: a timestamp, a pid, or a parent.
@@ -152,22 +206,35 @@ The output format belongs to the tool: the core moves arglists and knows
 nothing about JSON. bashcap declares its own row, flattening the snapshot
 under the provenance it wants:
 
-```rust
-#[derive(Serialize)]
-struct Row<'a> {
-    sent_at: u64,
-    heard_at: u64,
-    pid: u32,
-    seq: u32,
-    #[serde(flatten)]
-    snapshot: &'a Snapshot,
-}
-```
+`Capture` is that row, and `serde(flatten)` puts the provenance beside the
+snapshot's own fields rather than above them.
 
 Lines are written in **arrival** order, each carrying the shell's own clock
 and the run's, so ordering downstream is exact and is `sort`'s job. Writing in
 `hear` keeps resident memory independent of run length — see
 [measurements.md](measurements.md#memory).
+
+An indexed array travels as `[index, value]` pairs, not as an object: a bash
+indexed array is sparse, so its indices are data, and JSON can only spell an
+object key as a string — which `serde(flatten)` then cannot read back as a
+number.
+
+## Rendering
+
+`Display` on `Capture`, `Frame`, `Captured` and `Value`, and nothing else
+renders. A value prints as the bash that would declare it, because
+`bash::value`'s emitters already do exactly that:
+
+```
+[3] pid 488092 seq 0 shlvl 7 subshell 0
+    at    child_work@child.bash:12 ('a first argument' 'a second')
+    at    main@child.bash:14 ()
+    note  child process, own pid and SHLVL
+    var   payload [a] ([0]='x' [1]='y' [2]='z')
+```
+
+Empty parentheses are a call with no arguments; no parentheses at all is a
+shell that was not recording them.
 
 ## The program
 
@@ -189,33 +256,15 @@ make bashcap-demo [SCRIPT=path/to/your.bash]
 ```
 
 Builds the debug binary, emits the polyfill, runs
-`__fixtures/bashcap_demo/demo.bash` and renders what it captured. The fixture
+`__fixtures/bashcap_demo/demo.bash` and renders it with `bashcap show`. The fixture
 exercises every facility in one file — typed variables, ambient context,
 `BASH_REMATCH`, nested frames with argv, the CPS form, a subshell and a child
 process — and nothing asserts its line numbers, counts or variable names, so
 it is meant to be edited.
 
-Typical output:
-
-```
-4 snapshots from 3 shells
-
-[0] pid=8737 subshell=0 shlvl=6
-    inner@demo.bash:19 ← outer@demo.bash:17 ← main@demo.bash:22
-    note  two frames deep, four typed variables, one missing
-    var   greeting [--] scalar  = hello world
-    var   items    [a]  indexed = {'0': 'alpha', '1': 'beta gamma'}
-    var   conf     [A]  assoc   = {'port': '8080', 'host': 'localhost'}
-    var   attempts [i]  scalar  = 3
-    regex build-2026-08 | build | 2026 | 08
-
-[2] pid=8739 subshell=1 shlvl=6      from inside a subshell
-[3] pid=8741 subshell=0 shlvl=7      child process, own pid and SHLVL
-```
-
-Entries 2 and 3 come from a subshell and a child process: the first reaches
-the wire by re-joining under its own `$BASHPID`, the second because the
-prelude runs there too, through `BASH_ENV`.
+Typical output is the block above. come from a subshell and a child process: the first reaches the wire by
+re-joining under its own `$BASHPID`, the second because the prelude runs there
+too, through `BASH_ENV`.
 
 ## See also
 

@@ -7,11 +7,9 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use serde::Serialize;
-
 use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig};
 
-pub use snapshot::{Captured, Frame, Snapshot, Value, BASH, POLYFILL};
+pub use snapshot::{Capture, Captured, Frame, Snapshot, Value, BASH, POLYFILL};
 
 #[cfg(test)]
 mod tests;
@@ -26,20 +24,6 @@ pub struct BashCap {
 pub struct Capturing {
     pub written: usize,
     sink: BufWriter<File>,
-}
-
-/// bashcap's output format: the snapshot's own fields under the provenance
-/// the wire supplied. Lines are written in arrival order, and each carries
-/// both clocks, so ordering downstream is `sort`'s job.
-#[derive(Serialize)]
-struct Row<'a> {
-    sent_at: u64,
-    heard_at: u64,
-    pid: u32,
-    seq: u32,
-
-    #[serde(flatten)]
-    snapshot: &'a Snapshot,
 }
 
 impl BashCap {
@@ -65,20 +49,13 @@ impl Rig for BashCap {
         Ok(Capturing { written: 0, sink: BufWriter::new(sink) })
     }
 
+    /// One JSON object per line, in arrival order. Each carries both clocks,
+    /// so ordering downstream is exact and is `sort`'s job.
     fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> {
-        let Some(decoded) = Snapshot::of(&said) else { return Ok(()) };
+        let Some(decoded) = Capture::of(&said) else { return Ok(()) };
         let at = || format!("a snapshot from pid {}", said.pid);
 
-        let snapshot = decoded.doing(at)?;
-        let row = Row {
-            sent_at: said.sent_at.0,
-            heard_at: said.heard_at.0,
-            pid: said.pid.0,
-            seq: said.seq,
-            snapshot: &snapshot,
-        };
-
-        let json = serde_json::to_string(&row).doing(at)?;
+        let json = serde_json::to_string(&decoded.doing(at)?).doing(at)?;
         writeln!(session.sink, "{json}").doing(|| self.writing_to())?;
         session.written += 1;
 

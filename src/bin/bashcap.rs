@@ -1,12 +1,13 @@
 //! A transparent bash wrapper: run a script and write the full state of
 //! every shell at every `BASHCAP` call site.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 
-use mb_resolver::bash::rig::{run, ExitStatus, Failure};
-use mb_resolver::bashcap::{BashCap, POLYFILL};
+use mb_resolver::bash::rig::{run, Doing, ExitStatus, Failure};
+use mb_resolver::bashcap::{BashCap, Capture, POLYFILL};
 
 #[derive(Parser)]
 #[command(name = "bashcap", about = "Capture bash shell state at every BASHCAP call site")]
@@ -34,6 +35,12 @@ enum What {
         argv: Vec<String>,
     },
 
+    /// Render a capture written by `run`.
+    Show {
+        /// The file to read: one JSON snapshot per line.
+        from: PathBuf,
+    },
+
     /// Print the client-side no-op stubs.
     Polyfill,
 }
@@ -53,6 +60,13 @@ fn main() {
                 }
             }
         }
+        Ok(Cli { what: What::Show { from } }) => match show(&from) {
+            Ok(()) => 0,
+            Err(error) => {
+                eprintln!("bashcap: {error}");
+                1
+            }
+        },
         Err(complaint) => {
             let _ = complaint.print();
             2
@@ -60,6 +74,24 @@ fn main() {
     };
 
     std::process::exit(code);
+}
+
+/// The rendering is `Capture`'s own, so what this prints and what a library
+/// caller prints are the same text.
+fn show(from: &Path) -> Result<(), Failure> {
+    let reading = || format!("reading {}", from.display());
+    let text = std::fs::read_to_string(from).doing(reading)?;
+
+    let captures: Vec<Capture> =
+        text.lines().map(serde_json::from_str).collect::<Result<_, _>>().doing(reading)?;
+
+    let shells: HashSet<u32> = captures.iter().map(|capture| capture.pid).collect();
+    println!("{} snapshots from {} shells\n", captures.len(), shells.len());
+
+    for (at, capture) in captures.iter().enumerate() {
+        println!("[{at}] {capture}");
+    }
+    Ok(())
 }
 
 /// The exit code is the subject's, so a wrapped script is indistinguishable
