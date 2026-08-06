@@ -18,6 +18,11 @@ pub const BASH: &str = include_str!("bashcap.bash");
 /// `if` is false.
 pub const POLYFILL: &str = include_str!("polyfill.bash");
 
+/// Turns on the shell's own recording of call arguments, in every shell.
+/// Opt-in, because `extdebug` also makes `ERR`, `DEBUG` and `RETURN` traps
+/// inherited by functions and subshells — a change in the subject.
+pub const TRACE: &str = include_str!("trace.bash");
+
 /// The word every snapshot message begins with.
 pub const TAG: &str = "__BASHCAP__";
 

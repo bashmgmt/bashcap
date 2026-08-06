@@ -7,16 +7,18 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig};
+use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
 
-pub use snapshot::{Capture, Captured, Frame, Snapshot, Value, BASH, POLYFILL};
+pub use snapshot::{Capture, Captured, Frame, Snapshot, Value, BASH, POLYFILL, TRACE};
 
 #[cfg(test)]
 mod tests;
 
-/// Where the capture goes. A description: it opens nothing.
+/// Where the capture goes, and whether to ask the shell to record the
+/// arguments each call was made with. A description: it opens nothing.
 pub struct BashCap {
     into: PathBuf,
+    trace: bool,
 }
 
 /// bashcap's session: a sink and a tally. Written as each snapshot arrives,
@@ -28,7 +30,15 @@ pub struct Capturing {
 
 impl BashCap {
     pub fn writing(into: impl Into<PathBuf>) -> Self {
-        Self { into: into.into() }
+        Self { into: into.into(), trace: false }
+    }
+
+    /// Ask the subject's shells to record what each call was passed. This
+    /// changes the subject: `extdebug` makes `ERR`, `DEBUG` and `RETURN`
+    /// traps inherited by functions and subshells.
+    pub fn tracing_calls(mut self) -> Self {
+        self.trace = true;
+        self
     }
 
     fn writing_to(&self) -> String {
@@ -39,8 +49,16 @@ impl BashCap {
 impl Rig for BashCap {
     type Session = Capturing;
 
-    fn bash(&self) -> String {
-        BASH.to_string()
+    /// bashcap's instrument reaches every shell through the prelude, which
+    /// is why tracing lives here and not in the command line: `BASH_ENV`
+    /// reaches a subject's children, its argv does not.
+    fn startup(&self) -> Startup {
+        let bash = match self.trace {
+            true => format!("{BASH}\n{TRACE}"),
+            false => BASH.to_string(),
+        };
+
+        Startup { bash, ..Default::default() }
     }
 
     fn open(&self) -> Result<Capturing, Failure> {

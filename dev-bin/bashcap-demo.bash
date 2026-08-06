@@ -25,7 +25,7 @@ if [[ -f $VENDORED ]] && ! "$BIN" polyfill | diff -q - "$VENDORED" >/dev/null; t
 fi
 
 hr "run"
-"$BIN" run --into "$WORK/capture.jsonl" -- "$FIXTURE"
+"$BIN" run --into "$WORK/capture.jsonl" -- bash "$FIXTURE"
 printf '   the wrapped script exited %s\n' "$?"
 
 hr "captured snapshots"

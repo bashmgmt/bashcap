@@ -17,7 +17,7 @@ in the core, with typed snapshots for a session and no command line in
 between.
 
 ```
-bashcap run --into FILE [--verbose] [--] <bash args…>
+bashcap run --into FILE [--verbose] [--trace-calls] [--] <command…>
 bashcap show FILE
 bashcap polyfill
 ```
@@ -146,8 +146,15 @@ Three reasons, each sufficient:
 - Turning it on part-way leaves `BASH_ARGC` shorter than `FUNCNAME`, so the
   arguments that are there belong to the wrong frames.
 
+`--trace-calls` (or `BashCap::tracing_calls()`) asks for them anyway. It does
+**not** put anything on the command line — argv reaches only the top-level
+shell — but injects `trace.bash`, which arms `extdebug` one command past
+startup from a `DEBUG` trap that removes itself. Returning zero from that
+handler is not optional: under `extdebug` a non-zero `DEBUG` handler makes
+bash skip the command it fired for.
+
 A subject that traces itself — `shopt -s extdebug` as its own first statement,
-or a `bashdb` session — gets them for free. The test is the alignment, not the
+or a `bashdb` session — gets them without the flag. The test is the alignment, not the
 option:
 
 ```bash
@@ -182,7 +189,7 @@ pub struct Capturing { pub written: usize, sink: BufWriter<File> } // the sessio
 impl Rig for BashCap {
     type Session = Capturing;
 
-    fn bash(&self) -> String { BASH.to_string() }
+    fn startup(&self) -> Startup { Startup { bash: BASH.into(), ..Default::default() } }
     fn open(&self) -> Result<Capturing, Failure> { /* creates the file */ }
     fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> { /* writes */ }
     fn end(&self, session: &mut Capturing, _: ExitStatus) -> Result<(), Failure> {
@@ -199,6 +206,10 @@ alongside the status:
 ```rust
 let (capturing, status) = run(&BashCap::writing(into), argv)?;
 ```
+
+The wrapped command carries its own program, so `bashcap run --into out bash
+build.bash` is the ordinary form and `bashcap run --into out make test` also
+works: every bash `make` starts reads the same `BASH_ENV`.
 
 A failed flush in `end` ends the run rather than being lost in a `Drop`.
 

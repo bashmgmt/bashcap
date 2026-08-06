@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::{BashCap, Capture, Value, BASH, POLYFILL};
-use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig};
+use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig, Startup};
 
 /// A script that vendors the polyfill, as a shipped one would.
 fn script(temp: &Path, body: &str) -> PathBuf {
@@ -20,8 +20,8 @@ struct Decoding;
 impl Rig for Decoding {
     type Session = Vec<Capture>;
 
-    fn bash(&self) -> String {
-        BASH.to_string()
+    fn startup(&self) -> Startup {
+        Startup { bash: BASH.to_string(), ..Default::default() }
     }
 
     fn open(&self) -> Result<Self::Session, Failure> {
@@ -39,7 +39,7 @@ impl Rig for Decoding {
 
 fn capture(body: &str) -> Vec<Capture> {
     let temp = tempfile::tempdir().unwrap();
-    let (seen, _) = run(&Decoding, &[script(temp.path(), body)]).unwrap();
+    let (seen, _) = run(&Decoding, &["bash".into(), script(temp.path(), body).into_os_string()]).unwrap();
 
     seen
 }
@@ -106,7 +106,7 @@ fn each_snapshot_is_written_as_it_arrives() {
     let into = temp.path().join("out.jsonl");
     let entry = script(temp.path(), "BASHCAP -BCS:one\nBASHCAP -BCS:two");
 
-    let (capturing, status) = run(&BashCap::writing(&into), &[entry]).unwrap();
+    let (capturing, status) = run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()]).unwrap();
     assert_eq!(capturing.written, 2);
     assert_eq!(status, ExitStatus::Code(0));
 
@@ -183,7 +183,7 @@ fn a_written_capture_reads_back_whole() {
     let into = temp.path().join("out.jsonl");
     let entry = script(temp.path(), "shopt -s extdebug\nf() { BASHCAP -BCS:one; }\nf arg");
 
-    run(&BashCap::writing(&into), &[entry]).unwrap();
+    run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()]).unwrap();
 
     let text = std::fs::read_to_string(&into).unwrap();
     let read: Vec<Capture> =

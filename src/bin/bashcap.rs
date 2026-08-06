@@ -28,9 +28,16 @@ enum What {
         #[arg(long)]
         verbose: bool,
 
-        /// The wrapped command. Everything from the first plain word on is
-        /// the subject's; a command that itself starts with a dash goes
-        /// behind `--`.
+        /// Record what each call was passed. This asks the subject's shells
+        /// for `extdebug`, which also makes ERR, DEBUG and RETURN traps
+        /// inherited by functions and subshells.
+        #[arg(long)]
+        trace_calls: bool,
+
+        /// The wrapped command, program included — `bash build.bash`, or
+        /// `make test`, whose own shells join too. Everything from the first
+        /// plain word on is the subject's; a command that itself starts with
+        /// a dash goes behind `--`.
         #[arg(trailing_var_arg = true, required = true)]
         argv: Vec<String>,
     },
@@ -51,8 +58,8 @@ fn main() {
             print!("{POLYFILL}");
             0
         }
-        Ok(Cli { what: What::Run { into, verbose, argv } }) => {
-            match capture(&argv, &into, verbose) {
+        Ok(Cli { what: What::Run { into, verbose, trace_calls, argv } }) => {
+            match capture(&argv, &into, verbose, trace_calls) {
                 Ok(status) => status.shell_code(),
                 Err(error) => {
                     eprintln!("bashcap: {error}");
@@ -96,8 +103,18 @@ fn show(from: &Path) -> Result<(), Failure> {
 
 /// The exit code is the subject's, so a wrapped script is indistinguishable
 /// from an unwrapped one.
-fn capture(argv: &[String], into: &Path, verbose: bool) -> Result<ExitStatus, Failure> {
-    let (capturing, status) = run(&BashCap::writing(into), argv)?;
+fn capture(
+    argv: &[String],
+    into: &Path,
+    verbose: bool,
+    trace_calls: bool,
+) -> Result<ExitStatus, Failure> {
+    let mut bashcap = BashCap::writing(into);
+    if trace_calls {
+        bashcap = bashcap.tracing_calls();
+    }
+
+    let (capturing, status) = run(&bashcap, argv)?;
 
     if verbose {
         eprintln!("bashcap: {} snapshots -> {}", capturing.written, into.display());
