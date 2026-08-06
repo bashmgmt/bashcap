@@ -12,9 +12,9 @@ three concerns in three places:
 
 The instrument and its decoder are one subject: they are what another tool
 reuses, and `BashCap::bash()` returning `snapshot::BASH` is where the pairing
-is stated. `tests/examples/snapshotting.rs` is that reuse — bashcap expressed
-in the core, with typed snapshots for a session and no command line in
-between.
+is stated. `tests/examples/snapshotting.rs` is that reuse — bashcap expressed in the
+core, with typed captures for a session, `instrument(true)` for the full
+stack, and no command line in between.
 
 ```
 bashcap run --into FILE [--verbose] [--trace-calls] [--] <command…>
@@ -93,8 +93,11 @@ its first element.
 ## The decoder
 
 ```rust
-pub const BASH: &str;      // bashcap.bash
-pub const POLYFILL: &str;  // polyfill.bash
+/// The bash to put in a `Startup`, for any rig that wants what bashcap
+/// harvests. One way to compose it; `BASH` and `TRACE` are not public.
+pub fn instrument(tracing_calls: bool) -> String;
+
+pub const POLYFILL: &str;  // polyfill.bash — a client vendors this
 pub const TAG: &str = "__BASHCAP__";
 
 pub struct Snapshot {

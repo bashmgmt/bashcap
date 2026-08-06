@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use super::{BashCap, Capture, Value, BASH, POLYFILL};
+use super::snapshot::{BASH, TRACE};
+use super::{instrument, BashCap, Capture, Value, POLYFILL};
 use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig, Startup};
 
 /// A script that vendors the polyfill, as a shipped one would.
@@ -21,7 +22,7 @@ impl Rig for Decoding {
     type Session = Vec<Capture>;
 
     fn startup(&self) -> Startup {
-        Startup { bash: BASH.to_string(), ..Default::default() }
+        Startup { bash: instrument(false), ..Default::default() }
     }
 
     fn open(&self) -> Result<Self::Session, Failure> {
@@ -127,13 +128,14 @@ fn each_snapshot_is_written_as_it_arrives() {
     assert_eq!(rows[1]["notes"][0], "two");
 }
 
-/// bashcap rides into every shell through the same prelude the protocol
-/// uses, and its polyfill is sourced by the client's own script. Neither may
-/// put a name in the environment, where it would reach every process the
-/// subject starts.
+/// Every piece rides into a shell — two through the prelude, the polyfill
+/// through the client's own script. None may put a name in the environment,
+/// where it would reach every process the subject starts.
 #[test]
-fn neither_half_exports_a_name() {
-    for (whose, bash) in [("bashcap.bash", BASH), ("polyfill.bash", POLYFILL)] {
+fn no_shipped_bash_exports_a_name() {
+    let shipped = [("bashcap.bash", BASH), ("trace.bash", TRACE), ("polyfill.bash", POLYFILL)];
+
+    for (whose, bash) in shipped {
         for line in bash.lines().filter(|line| !line.trim_start().starts_with('#')) {
             assert!(!line.contains("export "), "{whose}: {line}");
         }

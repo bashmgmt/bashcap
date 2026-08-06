@@ -10,8 +10,9 @@ use crate::bash::rig::{field, Line};
 use crate::bash::value::{self, emit_assoc, emit_indexed, emit_q_words, emit_scalar};
 use crate::bash::value::{BashCodec, QuotedNest};
 
-/// `BASHCAP` and `WITH_BASHCAP`, in every shell.
-pub const BASH: &str = include_str!("bashcap.bash");
+/// `BASHCAP` and `WITH_BASHCAP`, in every shell. Reached through
+/// [`instrument`], which is the one way to compose what gets injected.
+pub(crate) const BASH: &str = include_str!("bashcap.bash");
 
 /// The no-op stubs a script vendors, so instrumented call sites stay safe to
 /// ship. Under the tool the real definitions are already in place and its
@@ -21,7 +22,17 @@ pub const POLYFILL: &str = include_str!("polyfill.bash");
 /// Turns on the shell's own recording of call arguments, in every shell.
 /// Opt-in, because `extdebug` also makes `ERR`, `DEBUG` and `RETURN` traps
 /// inherited by functions and subshells — a change in the subject.
-pub const TRACE: &str = include_str!("trace.bash");
+pub(crate) const TRACE: &str = include_str!("trace.bash");
+
+/// The bash to put in a [`Startup`](crate::bash::rig::Startup), for any rig
+/// that wants what bashcap harvests. With `tracing_calls`, every frame comes
+/// back with the arguments its call was made with — see [`Frame::args`].
+pub fn instrument(tracing_calls: bool) -> String {
+    match tracing_calls {
+        true => format!("{BASH}\n{TRACE}"),
+        false => BASH.to_string(),
+    }
+}
 
 /// The word every snapshot message begins with.
 pub const TAG: &str = "__BASHCAP__";

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
 
-pub use snapshot::{Capture, Captured, Frame, Snapshot, Value, BASH, POLYFILL, TRACE};
+pub use snapshot::{instrument, Capture, Captured, Frame, Snapshot, Value, POLYFILL};
 
 #[cfg(test)]
 mod tests;
@@ -53,12 +53,7 @@ impl Rig for BashCap {
     /// is why tracing lives here and not in the command line: `BASH_ENV`
     /// reaches a subject's children, its argv does not.
     fn startup(&self) -> Startup {
-        let bash = match self.trace {
-            true => format!("{BASH}\n{TRACE}"),
-            false => BASH.to_string(),
-        };
-
-        Startup { bash, ..Default::default() }
+        Startup { bash: instrument(self.trace), ..Default::default() }
     }
 
     fn open(&self) -> Result<Capturing, Failure> {
