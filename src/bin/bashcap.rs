@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 
 use mb_resolver::bash::rig::{run, Doing, ExitStatus, Failure};
-use mb_resolver::bashcap::{BashCap, Capture, POLYFILL};
+use mb_resolver::bashcap::{captures, BashCap, POLYFILL};
 
 #[derive(Parser)]
 #[command(name = "bashcap", about = "Capture bash shell state at every BASHCAP call site")]
@@ -83,19 +83,16 @@ fn main() {
     std::process::exit(code);
 }
 
-/// The rendering is `Capture`'s own, so what this prints and what a library
-/// caller prints are the same text.
+/// Both the reading and the rendering are the library's, so what this prints
+/// and what a library caller prints are the same text.
 fn show(from: &Path) -> Result<(), Failure> {
     let reading = || format!("reading {}", from.display());
-    let text = std::fs::read_to_string(from).doing(reading)?;
+    let seen = captures(&std::fs::read_to_string(from).doing(reading)?).doing(reading)?;
 
-    let captures: Vec<Capture> =
-        text.lines().map(serde_json::from_str).collect::<Result<_, _>>().doing(reading)?;
+    let shells: HashSet<u32> = seen.iter().map(|capture| capture.pid).collect();
+    println!("{} snapshots from {} shells\n", seen.len(), shells.len());
 
-    let shells: HashSet<u32> = captures.iter().map(|capture| capture.pid).collect();
-    println!("{} snapshots from {} shells\n", captures.len(), shells.len());
-
-    for (at, capture) in captures.iter().enumerate() {
+    for (at, capture) in seen.iter().enumerate() {
         println!("[{at}] {capture}");
     }
     Ok(())

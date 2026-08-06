@@ -1,7 +1,9 @@
 //! bashcap: a transparent bash wrapper that writes the full state of a
 //! running shell at every `BASHCAP` call site as one JSON object per line.
 
-pub mod snapshot;
+mod instrument;
+mod show;
+mod snapshot;
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -9,7 +11,9 @@ use std::path::PathBuf;
 
 use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
 
-pub use snapshot::{instrument, Capture, Captured, Frame, Snapshot, Value, POLYFILL};
+pub use instrument::{instrument, Tracing, POLYFILL};
+pub use show::captures;
+pub use snapshot::{Capture, Captured, Frame, Snapshot, Value};
 
 #[cfg(test)]
 mod tests;
@@ -18,7 +22,7 @@ mod tests;
 /// arguments each call was made with. A description: it opens nothing.
 pub struct BashCap {
     into: PathBuf,
-    trace: bool,
+    tracing: Tracing,
 }
 
 /// bashcap's session: a sink and a tally. Written as each snapshot arrives,
@@ -30,14 +34,14 @@ pub struct Capturing {
 
 impl BashCap {
     pub fn writing(into: impl Into<PathBuf>) -> Self {
-        Self { into: into.into(), trace: false }
+        Self { into: into.into(), tracing: Tracing::Off }
     }
 
     /// Ask the subject's shells to record what each call was passed. This
     /// changes the subject: `extdebug` makes `ERR`, `DEBUG` and `RETURN`
     /// traps inherited by functions and subshells.
     pub fn tracing_calls(mut self) -> Self {
-        self.trace = true;
+        self.tracing = Tracing::Calls;
         self
     }
 
@@ -53,7 +57,7 @@ impl Rig for BashCap {
     /// is why tracing lives here and not in the command line: `BASH_ENV`
     /// reaches a subject's children, its argv does not.
     fn startup(&self) -> Startup {
-        Startup { bash: instrument(self.trace), ..Default::default() }
+        Startup { bash: instrument(self.tracing), ..Default::default() }
     }
 
     fn open(&self) -> Result<Capturing, Failure> {

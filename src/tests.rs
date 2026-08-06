@@ -1,7 +1,11 @@
+//! bashcap's bash-level tests: each spawns a real shell, which is the only
+//! way to cover what the instrument harvests from one. What decodes without a
+//! shell is tested beside the decoder.
+
 use std::path::{Path, PathBuf};
 
-use super::snapshot::{BASH, TRACE};
-use super::{instrument, BashCap, Capture, Value, POLYFILL};
+use super::instrument::{BASH, TRACE};
+use super::{captures, instrument, BashCap, Capture, Tracing, Value, POLYFILL};
 use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig, Startup};
 
 /// A script that vendors the polyfill, as a shipped one would.
@@ -22,7 +26,7 @@ impl Rig for Decoding {
     type Session = Vec<Capture>;
 
     fn startup(&self) -> Startup {
-        Startup { bash: instrument(false), ..Default::default() }
+        Startup { bash: instrument(Tracing::Off), ..Default::default() }
     }
 
     fn open(&self) -> Result<Self::Session, Failure> {
@@ -176,9 +180,11 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
     // flat `BASH_ARGV` stack; miscounting them would shift every frame.
     assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
 
-    // Rendered as the bash that would pass them, newline and all.
     let shown = traced[0].snapshot.frames[0].to_string();
-    assert!(shown.ends_with(" ('d one' $'d\\ntwo')"), "{shown}");
+    assert!(
+        shown.ends_with(" ('d one' $'d\\ntwo')"),
+        "rendered as the bash that would pass them, newline and all: {shown}"
+    );
 }
 
 /// What `run` writes, `show` reads: the rendering a library caller gets is
@@ -194,9 +200,7 @@ fn a_written_capture_reads_back_whole() {
         .whole()
         .unwrap();
 
-    let text = std::fs::read_to_string(&into).unwrap();
-    let read: Vec<Capture> =
-        text.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 
     assert_eq!(read.len(), 1);
     assert_eq!(read[0].snapshot.frames[0].args.as_deref(), Some(["arg".to_string()].as_slice()));

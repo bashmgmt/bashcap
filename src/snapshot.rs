@@ -1,41 +1,15 @@
-//! The instrument: the bash that harvests a shell's stack, variables and
-//! regex state, the decoder that reads one back, and the one rendering of it.
-
-use std::fmt;
+//! The record one shell sends back, and the decoder that reads one off the
+//! wire.
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::bash::rig::{field, Line};
-use crate::bash::value::{self, emit_assoc, emit_indexed, emit_q_words, emit_scalar};
-use crate::bash::value::{BashCodec, QuotedNest};
+use crate::bash::rig::{field, Doing, Failure, Line};
+use crate::bash::value::{self, BashCodec, QuotedNest};
 
-/// `BASHCAP` and `WITH_BASHCAP`, in every shell. Reached through
-/// [`instrument`], which is the one way to compose what gets injected.
-pub(crate) const BASH: &str = include_str!("bashcap.bash");
-
-/// The no-op stubs a script vendors, so instrumented call sites stay safe to
-/// ship. Under the tool the real definitions are already in place and its
-/// `if` is false.
-pub const POLYFILL: &str = include_str!("polyfill.bash");
-
-/// Turns on the shell's own recording of call arguments, in every shell.
-/// Opt-in, because `extdebug` also makes `ERR`, `DEBUG` and `RETURN` traps
-/// inherited by functions and subshells — a change in the subject.
-pub(crate) const TRACE: &str = include_str!("trace.bash");
-
-/// The bash to put in a [`Startup`](crate::bash::rig::Startup), for any rig
-/// that wants what bashcap harvests. With `tracing_calls`, every frame comes
-/// back with the arguments its call was made with — see [`Frame::args`].
-pub fn instrument(tracing_calls: bool) -> String {
-    match tracing_calls {
-        true => format!("{BASH}\n{TRACE}"),
-        false => BASH.to_string(),
-    }
-}
-
-/// The word every snapshot message begins with.
-pub const TAG: &str = "__BASHCAP__";
+/// The word every snapshot message begins with, and the one thing that tells
+/// bashcap's messages from any other tool's on the same wire.
+const TAG: &str = "__BASHCAP__";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -111,20 +85,11 @@ pub struct Capture {
     pub snapshot: Snapshot,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SnapshotError(pub String);
-
-impl fmt::Display for SnapshotError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for SnapshotError {}
-
 impl Capture {
-    /// `None` for a line that is not one of ours.
-    pub fn of(line: &Line) -> Option<Result<Self, SnapshotError>> {
+    /// `None` for a line that is not one of ours; `Some(Err)` for one that is
+    /// and will not decode. Several tools may share the wire, and only the
+    /// second of those is anyone's failure.
+    pub fn of(line: &Line) -> Option<Result<Self, Failure>> {
         let sections = line.behind(TAG)?;
 
         Some(Snapshot::decode(sections).map(|snapshot| Self {
@@ -138,11 +103,11 @@ impl Capture {
 }
 
 impl Snapshot {
-    fn decode(sections: &[String]) -> Result<Self, SnapshotError> {
+    fn decode(sections: &[String]) -> Result<Self, Failure> {
         let traced = match section(sections, "traced")? {
             "yes" => true,
             "no" => false,
-            other => return Err(SnapshotError(format!("traced is {other:?}"))),
+            other => return Err(reading("traced", format!("it says {other:?}"))),
         };
 
         let frames = nested(sections, "frames")?
@@ -171,102 +136,40 @@ impl Snapshot {
 }
 
 /// A frame is its call site, then whatever arguments the shell had recorded.
-fn frame(row: &[String], traced: bool) -> Result<Frame, SnapshotError> {
+fn frame(row: &[String], traced: bool) -> Result<Frame, Failure> {
+    let broken = |what: String| Failure::new("reading a frame", what);
+
     let [funcname, source, lineno, args @ ..] = row else {
-        return Err(SnapshotError(format!("a frame is at least three words, got {row:?}")));
+        return Err(broken(format!("a frame is at least three words, got {row:?}")));
     };
     if !traced && !args.is_empty() {
-        return Err(SnapshotError(format!("arguments on an untraced frame: {row:?}")));
+        return Err(broken(format!("arguments on an untraced frame: {row:?}")));
     }
 
     Ok(Frame {
         funcname: funcname.clone(),
         source: source.clone(),
-        lineno: lineno.parse().map_err(|_| SnapshotError(format!("frame line {lineno:?}")))?,
+        lineno: lineno.parse().map_err(|_| broken(format!("line number {lineno:?}")))?,
         args: traced.then(|| args.to_vec()),
     })
 }
 
-// ── rendering ────────────────────────────────────────────────────────
-//
-// One way, and it is the types': a value prints as the bash that would
-// declare it, which is what `bash::value` already emits.
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Scalar(text) => write!(f, "{}", emit_scalar(text)),
-            Self::Indexed(items) => write!(f, "{}", emit_indexed(items)),
-            Self::Assoc(items) => write!(f, "{}", emit_assoc(items)),
-        }
-    }
-}
-
-impl fmt::Display for Captured {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let attrs = if self.attrs.is_empty() { "--" } else { &self.attrs };
-
-        write!(f, "[{attrs}] {}", self.value)
-    }
-}
-
-impl fmt::Display for Frame {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let file = self.source.rsplit('/').next().unwrap_or(&self.source);
-        write!(f, "{}@{file}:{}", self.funcname, self.lineno)?;
-
-        match &self.args {
-            Some(args) => write!(f, " ({})", emit_q_words(args)),
-            None => Ok(()),
-        }
-    }
-}
-
-impl fmt::Display for Capture {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let state = |key| self.snapshot.state.get(key).map_or("?", String::as_str);
-
-        writeln!(
-            f,
-            "pid {} seq {} shlvl {} subshell {}",
-            self.pid,
-            self.seq,
-            state("shlvl"),
-            state("subshell")
-        )?;
-
-        for frame in &self.snapshot.frames {
-            writeln!(f, "    at    {frame}")?;
-        }
-        for note in &self.snapshot.notes {
-            writeln!(f, "    note  {note}")?;
-        }
-        for (name, var) in &self.snapshot.vars {
-            writeln!(f, "    var   {name} {var}")?;
-        }
-        if !self.snapshot.rematch.is_empty() {
-            writeln!(f, "    regex {}", self.snapshot.rematch.join(" | "))?;
-        }
-        Ok(())
-    }
-}
-
 // ── the sections a message carries ───────────────────────────────────
 
-fn section<'a>(sections: &'a [String], key: &str) -> Result<&'a str, SnapshotError> {
-    field(sections, key).ok_or_else(|| SnapshotError(format!("no {key:?} section")))
+fn reading(key: &str, cause: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Failure {
+    Failure::new(format!("reading the {key:?} section"), cause)
 }
 
-fn flat(sections: &[String], key: &str) -> Result<Vec<String>, SnapshotError> {
-    QuotedNest
-        .words(section(sections, key)?)
-        .map_err(|cause| SnapshotError(format!("{key}: {cause}")))
+fn section<'a>(sections: &'a [String], key: &str) -> Result<&'a str, Failure> {
+    field(sections, key).ok_or_else(|| reading(key, "it is missing"))
 }
 
-fn nested(sections: &[String], key: &str) -> Result<Vec<Vec<String>>, SnapshotError> {
-    QuotedNest
-        .rows(section(sections, key)?)
-        .map_err(|cause| SnapshotError(format!("{key}: {cause}")))
+fn flat(sections: &[String], key: &str) -> Result<Vec<String>, Failure> {
+    QuotedNest.words(section(sections, key)?).map_err(|cause| reading(key, cause))
+}
+
+fn nested(sections: &[String], key: &str) -> Result<Vec<Vec<String>>, Failure> {
+    QuotedNest.rows(section(sections, key)?).map_err(|cause| reading(key, cause))
 }
 
 /// What `${ref[*]@A}` yields: `declare -aX name=rhs`, in its three parts.
@@ -296,17 +199,17 @@ impl<'a> Declaration<'a> {
 }
 
 /// The attribute letters say which form the right-hand side is in.
-fn captured(text: &str) -> Result<(String, Captured), SnapshotError> {
+fn captured(text: &str) -> Result<(String, Captured), Failure> {
     let Declaration { name, attrs, rhs } = Declaration::read(text)
-        .ok_or_else(|| SnapshotError(format!("not a declaration: {text:?}")))?;
-    let fail = |cause: value::ParseError| SnapshotError(format!("{name}: {cause}"));
+        .ok_or_else(|| Failure::new("reading a variable", format!("not a declaration: {text:?}")))?;
+    let at = || format!("reading the variable {name}");
 
     let value = if attrs.contains('A') {
-        Value::Assoc(value::parse_assoc(rhs).map_err(fail)?)
+        Value::Assoc(value::parse_assoc(rhs).doing(at)?)
     } else if attrs.contains('a') {
-        Value::Indexed(value::parse_indexed(rhs).map_err(fail)?)
+        Value::Indexed(value::parse_indexed(rhs).doing(at)?)
     } else {
-        Value::Scalar(value::parse_scalar(rhs).map_err(fail)?)
+        Value::Scalar(value::parse_scalar(rhs).doing(at)?)
     };
 
     Ok((name.to_string(), Captured { attrs, value }))

@@ -2,19 +2,21 @@
 
 A transparent bash wrapper that writes the full state of a running shell at
 every `BASHCAP` call site. It is the reference consumer of the rig, and it is
-three concerns in three places:
+one subject per file:
 
 | | | |
 |---|---|---|
-| the instrument | `bashcap/snapshot.rs`, `bashcap.bash`, `polyfill.bash` | the bash that harvests a shell's stack, variables and regex state, and the decoder that reads one back |
+| the instrument | `bashcap/instrument.rs`, `bashcap.bash`, `trace.bash`, `polyfill.bash` | the bash it ships, and the one function that composes what gets injected |
+| the record | `bashcap/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
+| the rendering | `bashcap/show.rs` | reading a written capture back, and the one `Display` of one |
 | the tool | `bashcap/mod.rs` | a rig whose session is a sink, and the JSON line format it owns |
 | the program | `src/bin/bashcap.rs` | `clap` and `main` |
 
-The instrument and its decoder are one subject: they are what another tool
-reuses, and `BashCap::bash()` returning `snapshot::BASH` is where the pairing
-is stated. `tests/examples/snapshotting.rs` is that reuse — bashcap expressed in the
-core, with typed captures for a session, `instrument(true)` for the full
-stack, and no command line in between.
+`instrument` and `Capture::of` are the pair another tool reuses: the bash that
+produces a snapshot, and the code that reads one back.
+`tests/examples/snapshotting.rs` is that reuse — bashcap expressed in the
+core, with typed captures for a session, `instrument(Tracing::Calls)` for the
+full stack, and no command line in between.
 
 ```
 bashcap run --into FILE [--verbose] [--trace-calls] [--] <command…>
@@ -93,12 +95,14 @@ its first element.
 ## The decoder
 
 ```rust
+/// Whether the subject's shells record what each call was passed.
+pub enum Tracing { Off, Calls }
+
 /// The bash to put in a `Startup`, for any rig that wants what bashcap
 /// harvests. One way to compose it; `BASH` and `TRACE` are not public.
-pub fn instrument(tracing_calls: bool) -> String;
+pub fn instrument(tracing: Tracing) -> String;
 
 pub const POLYFILL: &str;  // polyfill.bash — a client vendors this
-pub const TAG: &str = "__BASHCAP__";
 
 pub struct Snapshot {
     pub frames: Vec<Frame>,
@@ -129,10 +133,19 @@ pub struct Capture {
 }
 
 impl Capture {
-    /// `None` for a message that is not one of ours.
-    pub fn of(line: &Line) -> Option<Result<Self, SnapshotError>>;
+    /// `None` for a message that is not one of ours; `Some(Err)` for one that
+    /// is and will not decode.
+    pub fn of(line: &Line) -> Option<Result<Self, Failure>>;
 }
+
+/// Every capture in a file `BashCap` wrote: one JSON object per line. The one
+/// way to read one back, used by `bashcap show` and by the tests alike.
+pub fn captures(text: &str) -> Result<Vec<Capture>, Failure>;
 ```
+
+The word a snapshot message begins with is `__BASHCAP__`, and `Capture::of` is
+the only thing that reads it — which is what lets several tools share one wire
+while a decode failure stays visible.
 
 ## Call arguments
 
@@ -285,4 +298,4 @@ too, through `BASH_ENV`.
 - [wire.md](wire.md#the-prelude) — how a rig's bash reaches every shell
 - [rig.md](rig.md) — the trait it implements
 - `tests/examples/snapshotting.rs` — its instrument, reused without its CLI
-- `src/bashcap/tests.rs` — one run covering every section
+- `src/bashcap/tests.rs` — its bash-level tests: one run covering every section
