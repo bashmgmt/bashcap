@@ -54,26 +54,10 @@ enum What {
 
 fn main() {
     let code = match Cli::try_parse() {
-        Ok(Cli { what: What::Polyfill }) => {
-            print!("{POLYFILL}");
-            0
-        }
-        Ok(Cli { what: What::Run { into, verbose, trace_calls, argv } }) => {
-            match capture(&argv, &into, verbose, trace_calls) {
-                Ok(status) => status.shell_code(),
-                Err(error) => {
-                    eprintln!("bashcap: {error}");
-                    1
-                }
-            }
-        }
-        Ok(Cli { what: What::Show { from } }) => match show(&from) {
-            Ok(()) => 0,
-            Err(error) => {
-                eprintln!("bashcap: {error}");
-                1
-            }
-        },
+        Ok(cli) => perform(cli.what).unwrap_or_else(|error| {
+            eprintln!("bashcap: {error}");
+            1
+        }),
         Err(complaint) => {
             let _ = complaint.print();
             2
@@ -81,6 +65,21 @@ fn main() {
     };
 
     std::process::exit(code);
+}
+
+/// The exit code the subcommand earned. Only `run` has one of its own — it is
+/// the subject's — and everything that fails does so the same way.
+fn perform(what: What) -> Result<i32, Failure> {
+    match what {
+        What::Polyfill => {
+            print!("{POLYFILL}");
+            Ok(0)
+        }
+        What::Run { into, verbose, trace_calls, argv } => {
+            capture(&argv, &into, verbose, trace_calls).map(ExitStatus::shell_code)
+        }
+        What::Show { from } => show(&from).map(|()| 0),
+    }
 }
 
 /// Both the reading and the rendering are the library's, so what this prints

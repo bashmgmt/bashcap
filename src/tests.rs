@@ -206,6 +206,19 @@ fn a_written_capture_reads_back_whole() {
     assert!(read[0].to_string().contains("f@main.bash"), "{}", read[0]);
 }
 
+/// A byte bash cannot show travels as an octal escape, not as itself, so the
+/// frame stays valid UTF-8 and the value arrives whole. `\377` is the widest
+/// escape bash prints — three octal digits reach 511, which is where reading
+/// one back as a byte gives up.
+#[test]
+fn a_variable_holding_a_byte_bash_cannot_show_survives_the_wire() {
+    let snaps = capture("high=$'\\377'\nlow=$'a\\001b'\nBASHCAP -BCV:high -BCV:low");
+
+    let vars = &snaps[0].snapshot.vars;
+    assert_eq!(vars["high"].value, Value::Scalar("\u{ff}".into()));
+    assert_eq!(vars["low"].value, Value::Scalar("a\u{1}b".into()));
+}
+
 /// The frame walk runs inside the subject's shell, under whatever options it
 /// set. A bash arithmetic *command* succeeds only for a non-zero value, so a
 /// running total that reached zero would end an `errexit` script part-way
