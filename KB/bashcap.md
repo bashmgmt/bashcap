@@ -116,8 +116,8 @@ mirrors the assembly exactly: `flat` reads a section with `QuotedNest::words`,
 back into a name, its attribute letters, and its value.
 
 Note what the snapshot does **not** carry: a timestamp, a pid, or a parent.
-Those are provenance, they belong to `Line` and `Origin`, and every tool gets
-them without asking. See [tree.md](tree.md).
+Those are provenance: the protocol puts them in front of every message and
+every tool gets them on `Line` without asking. See [tree.md](tree.md).
 
 ## The tool
 
