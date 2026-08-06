@@ -170,18 +170,57 @@ handler is not optional: under `extdebug` a non-zero `DEBUG` handler makes
 bash skip the command it fired for.
 
 A subject that traces itself — `shopt -s extdebug` as its own first statement,
-or a `bashdb` session — gets them without the flag. The test is the alignment, not the
-option:
+or a `bashdb` session — gets them without the flag.
+
+### The stack math
+
+Three steps in `bashcap.bash`, each one idea.
+
+**Is the record trustworthy?** The test is alignment, not `shopt -q`.
+`BASH_ARGC[i]` is frame `i`'s width only where the array aligns 1:1 with
+`FUNCNAME`; enabling `extdebug` part-way leaves it short, and short means
+every width belongs to a different frame. What is not trustworthy is carried
+as *absent*, so nothing downstream needs to ask again:
 
 ```bash
-(( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )) && __bc_traced=yes
+local -a __bc_argc=()
+if (( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )); then
+    __bc_traced=yes
+    __bc_argc=("${BASH_ARGC[@]}")
+fi
 ```
 
-which is what "these arguments are trustworthy" actually means, and correctly
-rejects the part-way case. `BASH_ARGV` is one flat stack with the innermost
-frame first and each frame's arguments reversed within it; `BASHCAP`'s own
-frame is not reported but its flags still occupy the stack, so its `BASH_ARGC`
-must be stepped over or every frame shifts.
+**Where does each frame's group start?** `BASH_ARGV` is one flat stack: frame
+0's arguments, then frame 1's, and so on, with each group *reversed* within
+itself. Summing the widths ahead of a group gives its offset, which turns
+reading a frame into an index rather than a walk — and puts `BASHCAP`'s own
+group, at index 0, behind every reported frame by construction rather than by
+a correction:
+
+```bash
+for (( __bc_i = 0; __bc_i < ${#__bc_argc[@]}; __bc_i++ )); do
+    __bc_from[__bc_i]=$__bc_at
+    __bc_at=$(( __bc_at + __bc_argc[__bc_i] ))
+done
+```
+
+**Read the frame.** Counting the width down undoes the reversal, so arguments
+come out in the order the call was written. Untraced, `__bc_argc` is empty,
+every width reads 0, and the loop does not run — no branch needed.
+
+```bash
+for (( __bc_j = __bc_argc[__bc_i]; __bc_j > 0; __bc_j-- )); do
+    __bc_frame+=("${BASH_ARGV[__bc_from[__bc_i] + __bc_j - 1]}")
+done
+```
+
+**The cursor moves by assignment, not by `(( += ))`.** A bash arithmetic
+*command* reports success only for a non-zero value, so `(( at += n ))` returns
+1 whenever the running total is still 0 — which under the subject's own
+`set -e` ends the script part-way through a snapshot. Reaching zero needs
+nothing unusual: `BASHCAP` with no flags, and a frame called with no
+arguments. `$(( ))` inside an assignment has no such status.
+`tests.rs::the_walk_survives_the_subjects_own_shell_options` pins it.
 
 `__fixtures/bashcap_demo/child.bash` traces itself, so one demo run shows both
 paths. Costs nothing when untraced; about +70 µs on a three-deep stack when

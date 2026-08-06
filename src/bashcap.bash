@@ -12,33 +12,47 @@ BASHCAP() {
         esac
     done
 
-    # Bash records call arguments only under `extdebug`, which this never
-    # turns on: from BASH_ENV that means "start the debugger", and it makes
-    # ERR and DEBUG traps inherited. A subject already tracing gets them for
-    # free. Equal lengths is the test, not `shopt -q`: enabling extdebug
-    # part-way leaves BASH_ARGC short, and short means misattributed.
+    # Bash records call arguments only under `extdebug`. Equal lengths is the
+    # test, not `shopt -q`: BASH_ARGC[i] is meaningful only where it aligns
+    # 1:1 with FUNCNAME[i], and enabling extdebug part-way leaves it short —
+    # short means every frame's arguments belong to a different frame. What
+    # is not trustworthy is carried as absent, so the walk below needs no
+    # further test.
     local __bc_traced=no
-    (( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )) && __bc_traced=yes
+    local -a __bc_argc=()
+    if (( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )); then
+        __bc_traced=yes
+        __bc_argc=("${BASH_ARGC[@]}")
+    fi
 
-    local -a __bc_frames=()
-    local -i __bc_i __bc_argc __bc_j
-    local -i __bc_at=${BASH_ARGC[0]:-0}     # step over BASHCAP's own flags
+    # BASH_ARGV is one flat stack: frame 0's arguments first, then frame 1's,
+    # with each frame's own run reversed within its group. Summing the widths
+    # ahead of the group gives where that group starts, which turns reading a
+    # frame into an index rather than a walk — and puts BASHCAP's own group,
+    # at index 0, behind every reported frame by construction.
+    local -a __bc_from=()
+    local -i __bc_i __bc_at=0
+    for (( __bc_i = 0; __bc_i < ${#__bc_argc[@]}; __bc_i++ )); do
+        __bc_from[__bc_i]=$__bc_at
+        __bc_at=$(( __bc_at + __bc_argc[__bc_i] ))
+    done
+
+    # Frame 0 is BASHCAP's own and is never reported; a frame's line number is
+    # where the frame below it made the call, hence BASH_LINENO[i - 1].
+    local -a __bc_frames=() __bc_frame=()
+    local -i __bc_j
     for (( __bc_i = 1; __bc_i < ${#FUNCNAME[@]}; __bc_i++ )); do
-        local -a __bc_frame=(
+        __bc_frame=(
             "${FUNCNAME[__bc_i]}"
             "${BASH_SOURCE[__bc_i]}"
             "${BASH_LINENO[__bc_i - 1]}"
         )
 
-        if [[ $__bc_traced == yes ]]; then
-            # BASH_ARGV is one flat stack, innermost frame first, and each
-            # frame's own arguments run backwards within it.
-            __bc_argc=${BASH_ARGC[__bc_i]}
-            for (( __bc_j = __bc_argc; __bc_j > 0; __bc_j-- )); do
-                __bc_frame+=("${BASH_ARGV[__bc_at + __bc_j - 1]}")
-            done
-            (( __bc_at += __bc_argc ))
-        fi
+        # Counting the width down undoes the reversal within the group, so
+        # the arguments come out in the order the call was written.
+        for (( __bc_j = __bc_argc[__bc_i]; __bc_j > 0; __bc_j-- )); do
+            __bc_frame+=("${BASH_ARGV[__bc_from[__bc_i] + __bc_j - 1]}")
+        done
 
         __bc_frames+=("(${__bc_frame[*]@Q})")
     done

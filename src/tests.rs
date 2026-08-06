@@ -151,9 +151,8 @@ fn no_shipped_bash_exports_a_name() {
 }
 
 /// A subject that traces its own calls gets each frame's arguments, and one
-/// that does not gets `None` rather than an empty list. bashcap never enables
-/// `extdebug` itself: from `BASH_ENV` that means "start the debugger", and it
-/// makes ERR and DEBUG traps inherited by subshells.
+/// that does not gets `None` rather than an empty list. Neither was asked to
+/// trace, so nothing here turns `extdebug` on but the subject itself.
 #[test]
 fn call_arguments_arrive_where_the_shell_was_recording_them() {
     let body = r#"
@@ -205,4 +204,73 @@ fn a_written_capture_reads_back_whole() {
     assert_eq!(read.len(), 1);
     assert_eq!(read[0].snapshot.frames[0].args.as_deref(), Some(["arg".to_string()].as_slice()));
     assert!(read[0].to_string().contains("f@main.bash"), "{}", read[0]);
+}
+
+/// The frame walk runs inside the subject's shell, under whatever options it
+/// set. A bash arithmetic *command* succeeds only for a non-zero value, so a
+/// running total that reached zero would end an `errexit` script part-way
+/// through a snapshot — which is why the cursor moves by assignment. Reaching
+/// zero needs nothing to count: no flags on `BASHCAP`, and a frame called
+/// with no arguments.
+#[test]
+fn the_walk_survives_the_subjects_own_shell_options() {
+    let snaps =
+        capture("set -euo pipefail\nshopt -s extdebug\nf() { BASHCAP; }\nf\nBASHCAP -BCS:after\n");
+
+    assert_eq!(snaps.len(), 2, "the script ran on past the first snapshot");
+    assert_eq!(snaps[0].snapshot.frames[0].args, Some(Vec::new()), "f was called with none");
+    assert_eq!(snaps[1].snapshot.notes, ["after"]);
+}
+
+/// The tool's own switch, over a subject that traces nothing: the same script
+/// yields no arguments by default and every frame's by request, in the child
+/// process as well as the top-level shell. `BASH_ENV` is what reaches that
+/// child; a command line would have reached only the first shell.
+#[test]
+fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let child = temp.path().join("child.bash");
+    std::fs::write(&child, "deep() { BASHCAP -BCS:child; }\ndeep 'in a child'\n").unwrap();
+
+    let entry = script(
+        temp.path(),
+        &format!("outer() {{ BASHCAP -BCS:top; }}\nouter 'at the top'\nbash {}\n", child.display()),
+    );
+
+    let ran = |tool: BashCap, into: &Path| {
+        run(&tool, &["bash".into(), entry.clone().into_os_string()]).unwrap().whole().unwrap();
+
+        captures(&std::fs::read_to_string(into).unwrap()).unwrap()
+    };
+
+    let plain = temp.path().join("plain.jsonl");
+    let bare = ran(BashCap::writing(&plain), &plain);
+    assert_eq!(bare.len(), 2, "one snapshot from each shell");
+    assert!(
+        bare.iter().flat_map(|seen| &seen.snapshot.frames).all(|frame| frame.args.is_none()),
+        "nothing records call arguments unless the tool is asked to"
+    );
+
+    let full = temp.path().join("traced.jsonl");
+    let traced = ran(BashCap::writing(&full).tracing_calls(), &full);
+    let called: Vec<Vec<&[String]>> = traced
+        .iter()
+        .map(|seen| {
+            seen.snapshot
+                .frames
+                .iter()
+                .map(|frame| frame.args.as_deref().expect("asked for, so recorded"))
+                .collect()
+        })
+        .collect();
+
+    assert_eq!(
+        called,
+        [
+            [["at the top"].as_slice(), [].as_slice()],
+            [["in a child"].as_slice(), [].as_slice()],
+        ],
+        "the switch reached the child process too"
+    );
+    assert_ne!(traced[0].pid, traced[1].pid, "two shells, not one");
 }
