@@ -25,10 +25,7 @@ BASHCAP() {
         shellopts "$SHELLOPTS"
     )
 
-    local -a __bc_rematch=()
-    if [[ -n ${BASH_REMATCH[*]+set} ]]; then
-        __bc_rematch=("${BASH_REMATCH[@]}")
-    fi
+    local -a __bc_rematch=("${BASH_REMATCH[@]}")
 
     local -a __bc_declared=()
     local __bc_name
