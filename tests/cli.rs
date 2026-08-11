@@ -15,41 +15,38 @@ use support::Scripts;
 
 const BASHCAP: &str = env!("CARGO_BIN_EXE_bashcap");
 
-/// `--trace-calls` asks the subject's shells to record what each call was
-/// passed, and the subject is none the wiser: its own status comes back
-/// unchanged, and it never runs `shopt` itself.
-#[test]
-pub fn custom1() {
-    // Line 1 is where `BASHCAP` fires, line 3 where `step` was called.
-    let scripts = Scripts::of(&[(
-        "test.bash",
-        r#"step() {
-            BASHCAP -BCS:"one step";
-        }
+// #[test]
+// pub fn custom1() {
+//     // Line 1 is where `BASHCAP` fires, line 3 where `step` was called.
+//     let scripts = Scripts::of(&[(
+//         "test.bash",
+//         r#"step() {
+//             BASHCAP -BCS:"one step";
+//         }
 
-        step 'a target' --flag
-        exit 6
-        "#,
-    )]);
-    let into = scripts.at("capture.jsonl");
+//         step 'a target' --flag
+//         exit 6
+//         "#,
+//     )]);
+//     let into = scripts.at("capture.jsonl");
 
-    let ran = Command::new(BASHCAP)
-        .args(["run", "--into"])
-        .arg(&into)
-        .args(["--trace-calls", "--", "bash"])
-        .arg(scripts.at("test.bash"))
-        .output()
-        .expect("the built bashcap");
+//     let ran = Command::new(BASHCAP)
+//         .args(["run", "--into"])
+//         .arg(&into)
+//         .args(["--trace-calls", "--", "bash"])
+//         .arg(scripts.at("test.bash"))
+//         .output()
+//         .expect("the built bashcap");
 
-    let code = ran.status.code().unwrap();
-    assert!(code == 6, "the subject's own code, not the wrapper's: {code}");
+//     let code = ran.status.code().unwrap();
+//     assert!(code == 6, "the subject's own code, not the wrapper's: {code}");
 
-    // slurp & print out to stderr, the content of the jsonl
-    let jsonl_content = std::fs::read_to_string(&into).expect("reading the capture file");
-    eprintln!("Captured JSONL content:\n{}", jsonl_content);
+//     // slurp & print out to stderr, the content of the jsonl
+//     let jsonl_content = std::fs::read_to_string(&into).expect("reading the capture file");
+//     eprintln!("Captured JSONL content:\n{}", jsonl_content);
 
 
-}
+// }
 
 /// `--trace-calls` asks the subject's shells to record what each call was
 /// passed, and the subject is none the wiser: its own status comes back
