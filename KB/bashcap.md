@@ -227,8 +227,8 @@ paths. Costs nothing when untraced; about +70 µs on a three-deep stack when
 traced, against a ~611 µs snapshot.
 
 Recognise, then decode — the shape every decoder in the crate takes. Decoding
-mirrors the assembly exactly: `flat` reads a section with `QuotedNest::words`,
-`nested` with `rows`, and `Declaration::read` parses `declare -aX name=rhs`
+mirrors the assembly exactly: `flat` reads a section with `parse_array`,
+`nested` with `parse_rows`, and `Declaration::read` parses `declare -aX name=rhs`
 back into a name, its attribute letters, and its value.
 
 Note what the snapshot does **not** carry: a timestamp, a pid, or a parent.

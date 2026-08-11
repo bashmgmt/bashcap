@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::bash::rig::{field, Doing, Failure, Line};
-use crate::bash::value::{self, BashCodec, QuotedNest};
+use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_rows, parse_scalar};
 
 /// The word every snapshot message begins with, and the one thing that tells
 /// bashcap's messages from any other tool's on the same wire.
@@ -165,11 +165,11 @@ fn section<'a>(sections: &'a [String], key: &str) -> Result<&'a str, Failure> {
 }
 
 fn flat(sections: &[String], key: &str) -> Result<Vec<String>, Failure> {
-    QuotedNest.words(section(sections, key)?).map_err(|cause| reading(key, cause))
+    parse_array(section(sections, key)?).map_err(|cause| reading(key, cause))
 }
 
 fn nested(sections: &[String], key: &str) -> Result<Vec<Vec<String>>, Failure> {
-    QuotedNest.rows(section(sections, key)?).map_err(|cause| reading(key, cause))
+    parse_rows(section(sections, key)?).map_err(|cause| reading(key, cause))
 }
 
 /// What `${ref[*]@A}` yields: `declare -aX name=rhs`, in its three parts.
@@ -205,11 +205,11 @@ fn captured(text: &str) -> Result<(String, Captured), Failure> {
     let at = || format!("reading the variable {name}");
 
     let value = if attrs.contains('A') {
-        Value::Assoc(value::parse_assoc(rhs).doing(at)?)
+        Value::Assoc(parse_assoc(rhs).doing(at)?)
     } else if attrs.contains('a') {
-        Value::Indexed(value::parse_indexed(rhs).doing(at)?)
+        Value::Indexed(parse_indexed(rhs).doing(at)?)
     } else {
-        Value::Scalar(value::parse_scalar(rhs).doing(at)?)
+        Value::Scalar(parse_scalar(rhs).doing(at)?)
     };
 
     Ok((name.to_string(), Captured { attrs, value }))
