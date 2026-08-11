@@ -59,16 +59,21 @@ CPS form: it snapshots, runs the continuation, and returns *its* status.
 `bashcap.bash`, whose snapshot ends:
 
 ```bash
+    local -a __bc_walk=()
+    __bc_stack __bc_walk 2
+    …
     BC_INSTR say __BASHCAP__ \
-        frames  "(${__bc_frames[*]@Q})" \
+        "${__bc_walk[@]}" \
         state   "(${__bc_state[*]@Q})" \
         rematch "(${__bc_rematch[*]@Q})" \
         vars    "(${__bc_declared[*]@Q})" \
         notes   "(${__bc_notes[*]@Q})"
 ```
 
-Each section is a **nested array literal**, so the message keeps its structure
-all the way to Rust; `n_d(2)` decodes `frames`, `n_d(1)` the rest.
+The frame walk is not bashcap's: `__bc_stack` is shared with every tool that
+reports a stack, and contributes six sections of its own — see
+[stack.md](stack.md). Each section here is an array literal, read back with
+`parse_array`.
 
 Two details in the bash worth knowing:
 
@@ -160,7 +165,8 @@ Three reasons, each sufficient:
   traps become inherited by subshells and functions. That is a change in the
   subject's behaviour.
 - Turning it on part-way leaves `BASH_ARGC` shorter than `FUNCNAME`, so the
-  arguments that are there belong to the wrong frames.
+  arguments that are there belong to the wrong frames — which the reader
+  detects and carries as absent, but which is nothing to rely on.
 
 `--trace-calls` (or `BashCap::tracing_calls()`) asks for them anyway. It does
 **not** put anything on the command line — argv reaches only the top-level
@@ -174,62 +180,22 @@ or a `bashdb` session — gets them without the flag.
 
 ### The stack math
 
-Three steps in `bashcap.bash`, each one idea.
-
-**Is the record trustworthy?** The test is alignment, not `shopt -q`.
-`BASH_ARGC[i]` is frame `i`'s width only where the array aligns 1:1 with
-`FUNCNAME`; enabling `extdebug` part-way leaves it short, and short means
-every width belongs to a different frame. What is not trustworthy is carried
-as *absent*, so nothing downstream needs to ask again:
-
-```bash
-local -a __bc_argc=()
-if (( ${#BASH_ARGC[@]} == ${#FUNCNAME[@]} )); then
-    __bc_traced=yes
-    __bc_argc=("${BASH_ARGC[@]}")
-fi
-```
-
-**Where does each frame's group start?** `BASH_ARGV` is one flat stack: frame
-0's arguments, then frame 1's, and so on, with each group *reversed* within
-itself. Summing the widths ahead of a group gives its offset, which turns
-reading a frame into an index rather than a walk — and puts `BASHCAP`'s own
-group, at index 0, behind every reported frame by construction rather than by
-a correction:
-
-```bash
-for (( __bc_i = 0; __bc_i < ${#__bc_argc[@]}; __bc_i++ )); do
-    __bc_from[__bc_i]=$__bc_at
-    __bc_at=$(( __bc_at + __bc_argc[__bc_i] ))
-done
-```
-
-**Read the frame.** Counting the width down undoes the reversal, so arguments
-come out in the order the call was written. Untraced, `__bc_argc` is empty,
-every width reads 0, and the loop does not run — no branch needed.
-
-```bash
-for (( __bc_j = __bc_argc[__bc_i]; __bc_j > 0; __bc_j-- )); do
-    __bc_frame+=("${BASH_ARGV[__bc_from[__bc_i] + __bc_j - 1]}")
-done
-```
-
-**The cursor moves by assignment, not by `(( += ))`.** A bash arithmetic
-*command* reports success only for a non-zero value, so `(( at += n ))` returns
-1 whenever the running total is still 0 — which under the subject's own
-`set -e` ends the script part-way through a snapshot. Reaching zero needs
-nothing unusual: `BASHCAP` with no flags, and a frame called with no
-arguments. `$(( ))` inside an assignment has no such status.
-`tests.rs::the_walk_survives_the_subjects_own_shell_options` pins it.
+`bashcap.bash` does none. It calls `__bc_stack`, which ships bash's five arrays
+as they are, and every index — which frames are the instrument's, which line a
+frame is executing, where a call's arguments sit in the flat stack and which
+way round they are — is undone in Rust. [stack.md](stack.md) is the whole of
+it, including why alignment rather than `shopt -q` decides whether a record is
+trustworthy.
 
 `__fixtures/bashcap_demo/child.bash` traces itself, so one demo run shows both
-paths. Costs nothing when untraced; about +70 µs on a three-deep stack when
-traced, against a ~611 µs snapshot.
+paths. About +45 µs on a six-deep stack when traced, against a ~480 µs
+snapshot — see [measurements.md](measurements.md#cost-of-a-snapshot).
 
 Recognise, then decode — the shape every decoder in the crate takes. Decoding
-mirrors the assembly exactly: `flat` reads a section with `parse_array`,
-`nested` with `parse_rows`, and `Declaration::read` parses `declare -aX name=rhs`
-back into a name, its attribute letters, and its value.
+mirrors the assembly exactly: `Columns::of` takes the six the frame walk
+contributed, `flat` reads the rest with `parse_array`, and
+`Declaration::read` parses `declare -aX name=rhs` back into a name, its
+attribute letters, and its value.
 
 Note what the snapshot does **not** carry: a timestamp, a pid, or a parent.
 Those are provenance: the protocol puts them in front of every message and

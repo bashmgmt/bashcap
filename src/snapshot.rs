@@ -5,7 +5,8 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::bash::rig::{field, Doing, Failure, Line};
-use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_rows, parse_scalar};
+use crate::bash::stack::{Columns, Frame};
+use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
 /// The word every snapshot message begins with, and the one thing that tells
 /// bashcap's messages from any other tool's on the same wire.
@@ -44,19 +45,6 @@ mod sparse {
 pub struct Captured {
     pub attrs: String,
     pub value: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Frame {
-    pub funcname: String,
-    pub source: String,
-    pub lineno: u32,
-
-    /// The call's arguments, when the shell was recording them. `None` is
-    /// "not recorded", never "called with none": bash keeps these only under
-    /// `extdebug`, which this crate does not turn on.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub args: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,16 +92,7 @@ impl Capture {
 
 impl Snapshot {
     fn decode(sections: &[String]) -> Result<Self, Failure> {
-        let traced = match section(sections, "traced")? {
-            "yes" => true,
-            "no" => false,
-            other => return Err(reading("traced", format!("it says {other:?}"))),
-        };
-
-        let frames = nested(sections, "frames")?
-            .into_iter()
-            .map(|row| frame(&row, traced))
-            .collect::<Result<_, _>>()?;
+        let frames = Columns::of(sections)?.frames()?;
 
         let state = flat(sections, "state")?
             .chunks_exact(2)
@@ -135,25 +114,6 @@ impl Snapshot {
     }
 }
 
-/// A frame is its call site, then whatever arguments the shell had recorded.
-fn frame(row: &[String], traced: bool) -> Result<Frame, Failure> {
-    let broken = |what: String| Failure::new("reading a frame", what);
-
-    let [funcname, source, lineno, args @ ..] = row else {
-        return Err(broken(format!("a frame is at least three words, got {row:?}")));
-    };
-    if !traced && !args.is_empty() {
-        return Err(broken(format!("arguments on an untraced frame: {row:?}")));
-    }
-
-    Ok(Frame {
-        funcname: funcname.clone(),
-        source: source.clone(),
-        lineno: lineno.parse().map_err(|_| broken(format!("line number {lineno:?}")))?,
-        args: traced.then(|| args.to_vec()),
-    })
-}
-
 // ── the sections a message carries ───────────────────────────────────
 
 fn reading(key: &str, cause: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Failure {
@@ -166,10 +126,6 @@ fn section<'a>(sections: &'a [String], key: &str) -> Result<&'a str, Failure> {
 
 fn flat(sections: &[String], key: &str) -> Result<Vec<String>, Failure> {
     parse_array(section(sections, key)?).map_err(|cause| reading(key, cause))
-}
-
-fn nested(sections: &[String], key: &str) -> Result<Vec<Vec<String>>, Failure> {
-    parse_rows(section(sections, key)?).map_err(|cause| reading(key, cause))
 }
 
 /// What `${ref[*]@A}` yields: `declare -aX name=rhs`, in its three parts.
@@ -245,22 +201,4 @@ mod tests {
         }
     }
 
-    /// A frame carries arguments only where the shell recorded them, and the
-    /// difference is a type rather than an empty list.
-    #[test]
-    fn a_frame_says_whether_its_arguments_are_known() {
-        let row = ["f".to_string(), "/x.bash".into(), "12".into(), "one".into(), "two".into()];
-
-        let traced = frame(&row, true).unwrap();
-        assert_eq!(traced.args.as_deref(), Some(["one".to_string(), "two".into()].as_slice()));
-        assert_eq!(traced.to_string(), "f@x.bash:12 ('one' 'two')");
-
-        let bare = frame(&row[..3], false).unwrap();
-        assert_eq!(bare.args, None, "not recorded is not the same as none passed");
-        assert_eq!(bare.to_string(), "f@x.bash:12");
-
-        assert_eq!(frame(&row[..3], true).unwrap().args, Some(Vec::new()), "called with none");
-        assert!(frame(&row, false).is_err(), "arguments the shell could not have recorded");
-        assert!(frame(&row[..2], true).is_err(), "a frame is at least three words");
-    }
 }

@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::instrument::{BASH, TRACE};
+use crate::bash::STACK;
 use super::{captures, instrument, BashCap, Capture, Tracing, Value, POLYFILL};
 use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig, Startup};
 
@@ -147,7 +148,8 @@ fn each_snapshot_is_written_as_it_arrives() {
 /// where it would reach every process the subject starts.
 #[test]
 fn no_shipped_bash_exports_a_name() {
-    let shipped = [("bashcap.bash", BASH), ("trace.bash", TRACE), ("polyfill.bash", POLYFILL)];
+    let shipped = [("stack.bash", STACK), ("bashcap.bash", BASH), ("trace.bash", TRACE),
+        ("polyfill.bash", POLYFILL)];
 
     for (whose, bash) in shipped {
         for line in bash.lines().filter(|line| !line.trim_start().starts_with('#')) {
@@ -181,8 +183,9 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
         .map(|frame| frame.args.as_deref().expect("the shell was recording"))
         .collect();
 
-    // `BASHCAP`'s own frame is not reported, but its flags still sit in the
-    // flat `BASH_ARGV` stack; miscounting them would shift every frame.
+    // The two instrument frames are not reported, but their own arguments
+    // still sit in the flat `BASH_ARGV` stack; miscounting them would shift
+    // every frame's group.
     assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
 
     let shown = traced[0].snapshot.frames[0].to_string();

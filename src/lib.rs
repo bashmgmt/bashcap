@@ -13,7 +13,8 @@ use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
 
 pub use instrument::{instrument, Tracing, POLYFILL};
 pub use show::captures;
-pub use snapshot::{Capture, Captured, Frame, Snapshot, Value};
+pub use crate::bash::stack::Frame;
+pub use snapshot::{Capture, Captured, Snapshot, Value};
 
 #[cfg(test)]
 mod tests;

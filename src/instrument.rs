@@ -27,9 +27,14 @@ pub enum Tracing {
 
 /// The bash to put in a [`Startup`](crate::bash::rig::Startup), for any rig
 /// that wants what bashcap harvests.
+///
+/// The frame walk is [`bash::STACK`](crate::bash::STACK), which bashcap shares
+/// with every other instrument that reports a stack.
 pub fn instrument(tracing: Tracing) -> String {
+    let stack = crate::bash::STACK;
+
     match tracing {
-        Tracing::Off => BASH.to_string(),
-        Tracing::Calls => format!("{BASH}\n{TRACE}"),
+        Tracing::Off => format!("{stack}\n{BASH}"),
+        Tracing::Calls => format!("{stack}\n{BASH}\n{TRACE}"),
     }
 }

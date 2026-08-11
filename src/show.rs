@@ -6,9 +6,9 @@
 
 use std::fmt;
 
-use super::{Capture, Captured, Frame, Value};
+use super::{Capture, Captured, Value};
 use crate::bash::rig::{Doing, Failure};
-use crate::bash::value::{emit_assoc, emit_indexed, emit_q_words, emit_scalar};
+use crate::bash::value::{emit_assoc, emit_indexed, emit_scalar};
 
 /// Every capture in a file written by [`BashCap`](super::BashCap): one JSON
 /// object per line, in the order they were heard.
@@ -34,18 +34,6 @@ impl fmt::Display for Captured {
         let attrs = if self.attrs.is_empty() { "--" } else { &self.attrs };
 
         write!(f, "[{attrs}] {}", self.value)
-    }
-}
-
-impl fmt::Display for Frame {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let file = self.source.rsplit('/').next().unwrap_or(&self.source);
-        write!(f, "{}@{file}:{}", self.funcname, self.lineno)?;
-
-        match &self.args {
-            Some(args) => write!(f, " ({})", emit_q_words(args)),
-            None => Ok(()),
-        }
     }
 }
 
