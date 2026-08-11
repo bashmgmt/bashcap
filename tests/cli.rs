@@ -23,7 +23,11 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
     // Line 1 is where `BASHCAP` fires, line 3 where `step` was called.
     let scripts = Scripts::of(&[(
         "build.bash",
-        "step() { BASHCAP -BCS:\"one step\"; }\n\nstep 'a target' --flag\nexit 7\n",
+        r#"step() { BASHCAP -BCS:"one step"; }
+
+        step 'a target' --flag
+        exit 7
+        "#,
     )]);
     let into = scripts.at("capture.jsonl");
 
@@ -53,7 +57,13 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
 /// claiming it was called with none.
 #[test]
 fn without_the_switch_nothing_is_traced() {
-    let scripts = Scripts::of(&[("build.bash", "step() { BASHCAP; }\n\nstep 'a target'\n")]);
+    let scripts = Scripts::of(&[(
+        "build.bash",
+        r#"step() { BASHCAP; }
+
+        step 'a target'
+        "#,
+    )]);
     let into = scripts.at("capture.jsonl");
 
     let ran = Command::new(BASHCAP)

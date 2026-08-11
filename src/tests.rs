@@ -109,7 +109,13 @@ fn a_snapshot_carries_the_whole_shell_state() {
 fn each_snapshot_is_written_as_it_arrives() {
     let temp = tempfile::tempdir().unwrap();
     let into = temp.path().join("out.jsonl");
-    let entry = script(temp.path(), "BASHCAP -BCS:one\nBASHCAP -BCS:two");
+    let entry = script(
+        temp.path(),
+        r#"
+        BASHCAP -BCS:one
+        BASHCAP -BCS:two
+        "#,
+    );
 
     let (capturing, status) =
         run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()])
@@ -192,7 +198,14 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
 fn a_written_capture_reads_back_whole() {
     let temp = tempfile::tempdir().unwrap();
     let into = temp.path().join("out.jsonl");
-    let entry = script(temp.path(), "shopt -s extdebug\nf() { BASHCAP -BCS:one; }\nf arg");
+    let entry = script(
+        temp.path(),
+        r#"
+        shopt -s extdebug
+        f() { BASHCAP -BCS:one; }
+        f arg
+        "#,
+    );
 
     run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()])
         .unwrap()
@@ -212,7 +225,13 @@ fn a_written_capture_reads_back_whole() {
 /// one back as a byte gives up.
 #[test]
 fn a_variable_holding_a_byte_bash_cannot_show_survives_the_wire() {
-    let snaps = capture("high=$'\\377'\nlow=$'a\\001b'\nBASHCAP -BCV:high -BCV:low");
+    let snaps = capture(
+        r#"
+        high=$'\377'
+        low=$'a\001b'
+        BASHCAP -BCV:high -BCV:low
+        "#,
+    );
 
     let vars = &snaps[0].snapshot.vars;
     assert_eq!(vars["high"].value, Value::Scalar("\u{ff}".into()));
@@ -227,8 +246,15 @@ fn a_variable_holding_a_byte_bash_cannot_show_survives_the_wire() {
 /// with no arguments.
 #[test]
 fn the_walk_survives_the_subjects_own_shell_options() {
-    let snaps =
-        capture("set -euo pipefail\nshopt -s extdebug\nf() { BASHCAP; }\nf\nBASHCAP -BCS:after\n");
+    let snaps = capture(
+        r#"
+        set -euo pipefail
+        shopt -s extdebug
+        f() { BASHCAP; }
+        f
+        BASHCAP -BCS:after
+        "#,
+    );
 
     assert_eq!(snaps.len(), 2, "the script ran on past the first snapshot");
     assert_eq!(snaps[0].snapshot.frames[0].args, Some(Vec::new()), "f was called with none");
@@ -243,11 +269,25 @@ fn the_walk_survives_the_subjects_own_shell_options() {
 fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     let temp = tempfile::tempdir().unwrap();
     let child = temp.path().join("child.bash");
-    std::fs::write(&child, "deep() { BASHCAP -BCS:child; }\ndeep 'in a child'\n").unwrap();
+    std::fs::write(
+        &child,
+        r#"
+        deep() { BASHCAP -BCS:child; }
+        deep 'in a child'
+        "#,
+    )
+    .unwrap();
 
     let entry = script(
         temp.path(),
-        &format!("outer() {{ BASHCAP -BCS:top; }}\nouter 'at the top'\nbash {}\n", child.display()),
+        &format!(
+            r#"
+            outer() {{ BASHCAP -BCS:top; }}
+            outer 'at the top'
+            bash {}
+            "#,
+            child.display()
+        ),
     );
 
     let ran = |tool: BashCap, into: &Path| {
