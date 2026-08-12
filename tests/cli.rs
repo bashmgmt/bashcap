@@ -84,13 +84,18 @@ fn without_the_switch_nothing_is_traced() {
     assert!(!text.contains("a target"), "no arguments were recorded to report: {text}");
 }
 
-/// A run that died inside a measured call still measured what completed, and
-/// the two halves of `Profile::of`'s result go to the two streams: the
-/// measurements to stdout, what prevented a whole profile to stderr. The
-/// subject's own status comes back either way.
-#[test]
-fn a_run_that_died_mid_call_reports_both_halves() {
-    let scripts = Scripts::of(&[(
+fn bashprof(scripts: &Scripts, output: &[&str]) -> std::process::Output {
+    Command::new(BASHPROF)
+        .args(output)
+        .args(["--", "bash"])
+        .arg(scripts.at("build.bash"))
+        .output()
+        .expect("the built bashprof")
+}
+
+/// A run the shell dies inside: one call measured, one that never ended.
+fn dying() -> Scripts {
+    Scripts::of(&[(
         "build.bash",
         r#"set -e
         step()   { :; }
@@ -99,22 +104,61 @@ fn a_run_that_died_mid_call_reports_both_halves() {
         BASHPROF_TIME_CPS ok step
         BASHPROF_TIME_CPS doomed broken
         "#,
-    )]);
+    )])
+}
 
-    let ran = Command::new(BASHPROF)
-        .args(["--", "bash"])
-        .arg(scripts.at("build.bash"))
-        .output()
-        .expect("the built bashprof");
+/// Every entry of the default output claims a duration, and a call the shell
+/// died inside has none to give. So nothing goes to stdout, the calls that
+/// prevented it go to stderr, and the subject's own status comes back.
+#[test]
+fn a_run_that_died_mid_call_refuses_to_report_measurements() {
+    let ran = bashprof(&dying(), &[]);
 
     assert_eq!(ran.status.code(), Some(1), "the subject's own code, not the wrapper's");
+    assert_eq!(String::from_utf8(ran.stdout).unwrap().trim(), "", "no tree claiming time it lacks");
+    assert!(
+        String::from_utf8(ran.stderr).unwrap().contains(r#"calls that never ended: ["doomed"]"#),
+        "the diagnosis names them"
+    );
+}
 
-    let measured = String::from_utf8(ran.stdout).unwrap();
-    let why = String::from_utf8(ran.stderr).unwrap();
+/// The same run as recorded, where an end is a fact that may be absent rather
+/// than one the output depends on. Every call that began is there.
+#[test]
+fn the_recorded_output_keeps_the_call_that_never_ended() {
+    let ran = bashprof(&dying(), &["--output=tree-with-err"]);
+    assert_eq!(ran.status.code(), Some(1), "still the subject's own code");
 
-    assert!(measured.contains("ok ") && measured.contains("µs of its own"), "{measured}");
-    assert!(!measured.contains("doomed"), "a call that never ended is no measurement: {measured}");
-    assert!(why.contains(r#"calls that never ended: ["doomed"]"#), "{why}");
+    let tree: serde_json::Value = serde_json::from_slice(&ran.stdout).expect("a JSON tree");
+    let ends: Vec<(&str, bool)> = tree
+        .as_array()
+        .expect("an array of roots")
+        .iter()
+        .map(|node| (node["label"].as_str().unwrap(), node["ended"].is_null()))
+        .collect();
+
+    assert_eq!(ends, [("ok", false), ("doomed", true)], "{tree:#}");
+}
+
+/// Before any of it is read as calls: one JSON object per line, each the
+/// arglist one shell sent with the provenance the protocol put in front. The
+/// END that never came is the whole difference from the recorded tree.
+#[test]
+fn the_raw_output_is_one_message_per_line() {
+    let ran = bashprof(&dying(), &["--output=raw"]);
+    let text = String::from_utf8(ran.stdout).unwrap();
+
+    let heard: Vec<serde_json::Value> =
+        text.lines().map(|line| serde_json::from_str(line).expect("one message per line")).collect();
+
+    let said: Vec<String> =
+        heard.iter().map(|line| line["words"][1].as_str().unwrap().to_string()).collect();
+
+    assert_eq!(said, ["BEGIN", "END", "BEGIN"], "{text}");
+    assert!(
+        heard.iter().all(|line| line["kind"] == "SAY" && line["words"][0] == "TIME_CPS"),
+        "{text}"
+    );
 }
 
 /// The stub a client vendors, and the guard that decides whether it is
@@ -132,7 +176,7 @@ fn vendoring() -> Scripts {
             "build.bash",
             &format!(
                 "source \"$(dirname \"${{BASH_SOURCE[0]}}\")/polyfill.bash\"\n{GUARD}\n\
-                 step() {{ echo \"ran $1\"; }}\n\
+                 step() {{ echo \"ran $1\" >&2; }}\n\
                  BASHPROF_TIME_CPS build step target\n"
             ),
         ),
@@ -146,7 +190,7 @@ fn the_vendored_stub_runs_an_instrumented_script_unprofiled() {
     let scripts = vendoring();
     let ran = Command::new("bash").arg(scripts.at("build.bash")).output().expect("bash");
 
-    assert_eq!(String::from_utf8(ran.stdout).unwrap(), "ran target\n");
+    assert_eq!(String::from_utf8(ran.stderr).unwrap(), "ran target\n");
     assert_eq!(ran.status.code(), Some(0));
 }
 
@@ -155,17 +199,14 @@ fn the_vendored_stub_runs_an_instrumented_script_unprofiled() {
 /// that installed itself unconditionally would measure nothing, silently.
 #[test]
 fn the_guard_leaves_the_real_word_in_place_under_the_tool() {
-    let scripts = vendoring();
-    let ran = Command::new(BASHPROF)
-        .args(["--", "bash"])
-        .arg(scripts.at("build.bash"))
-        .output()
-        .expect("the built bashprof");
-
-    let measured = String::from_utf8(ran.stdout).unwrap();
+    let ran = bashprof(&vendoring(), &[]);
+    let text = String::from_utf8(ran.stdout).unwrap();
 
     assert_eq!(ran.status.code(), Some(0));
-    assert!(measured.contains("ran target"), "the subject still ran: {measured}");
-    assert!(measured.contains("build ") && measured.contains("µs of its own"),
-        "the vendored stub did not displace the real word: {measured}");
+    assert!(String::from_utf8(ran.stderr).unwrap().contains("ran target"), "the subject still ran");
+
+    let tree: serde_json::Value = serde_json::from_str(&text).expect("a JSON tree");
+
+    assert_eq!(tree[0]["label"], "build", "the stub did not displace the real word: {tree:#}");
+    assert!(tree[0]["inclusive"].as_u64().is_some(), "{tree:#}");
 }
