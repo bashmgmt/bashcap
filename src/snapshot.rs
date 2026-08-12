@@ -12,7 +12,7 @@ use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 /// bashcap's messages from any other tool's on the same wire.
 const TAG: &str = "__BASHCAP__";
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Value {
     Scalar(String),
@@ -41,7 +41,7 @@ mod sparse {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Captured {
     pub attrs: String,
     pub value: Value,
