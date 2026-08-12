@@ -1,5 +1,4 @@
-//! The bash bashcap ships: what it injects into a subject's shells, and the
-//! stubs a script vendors so its call sites stay safe to ship without it.
+//! The bash bashcap injects into a subject's shells.
 
 /// `BASHCAP` and `WITH_BASHCAP`, in every shell. Reached through
 /// [`instrument`], which is the one way to compose what gets injected.
@@ -7,11 +6,6 @@ pub(crate) const BASH: &str = include_str!("bashcap.bash");
 
 /// Turns on the shell's own recording of call arguments, in every shell.
 pub(crate) const TRACE: &str = include_str!("trace.bash");
-
-/// The no-op stubs a script vendors, so instrumented call sites stay safe to
-/// ship. Under the tool the real definitions are already in place and its
-/// `if` is false.
-pub const POLYFILL: &str = include_str!("polyfill.bash");
 
 /// Whether the subject's shells record what each call was passed. Opt-in,
 /// because `extdebug` also makes `ERR`, `DEBUG` and `RETURN` traps inherited

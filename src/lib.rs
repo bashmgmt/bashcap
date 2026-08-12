@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
 
-pub use instrument::{instrument, Tracing, POLYFILL};
+pub use instrument::{instrument, Tracing};
 pub use show::captures;
 pub use crate::bash::stack::Frame;
 pub use snapshot::{Capture, Captured, Snapshot, Value};

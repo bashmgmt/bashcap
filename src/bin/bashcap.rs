@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 
 use mb_resolver::bash::rig::{run, Doing, ExitStatus, Failure};
-use mb_resolver::bashcap::{captures, BashCap, POLYFILL};
+use mb_resolver::bashcap::{captures, BashCap};
 
 #[derive(Parser)]
 #[command(name = "bashcap", about = "Capture bash shell state at every BASHCAP call site")]
@@ -47,9 +47,6 @@ enum What {
         /// The file to read: one JSON snapshot per line.
         from: PathBuf,
     },
-
-    /// Print the client-side no-op stubs.
-    Polyfill,
 }
 
 fn main() {
@@ -71,10 +68,6 @@ fn main() {
 /// the subject's — and everything that fails does so the same way.
 fn perform(what: What) -> Result<i32, Failure> {
     match what {
-        What::Polyfill => {
-            print!("{POLYFILL}");
-            Ok(0)
-        }
         What::Run { into, verbose, trace_calls, argv } => {
             capture(&argv, &into, verbose, trace_calls).map(ExitStatus::shell_code)
         }

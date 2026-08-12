@@ -102,7 +102,7 @@ fn a_run_that_died_mid_call_reports_both_halves() {
     )]);
 
     let ran = Command::new(BASHPROF)
-        .args(["run", "--", "bash"])
+        .args(["--", "bash"])
         .arg(scripts.at("build.bash"))
         .output()
         .expect("the built bashprof");
@@ -117,19 +117,55 @@ fn a_run_that_died_mid_call_reports_both_halves() {
     assert!(why.contains(r#"calls that never ended: ["doomed"]"#), "{why}");
 }
 
-/// The stub makes an instrumented script safe to run without the tool: the
-/// call sites stay where they are, and the calls they wrap still happen.
-#[test]
-fn the_polyfill_runs_an_instrumented_script_unprofiled() {
-    let stub = Command::new(BASHPROF).arg("polyfill").output().expect("bashprof polyfill");
-    let build = format!(
-        "{}\nstep() {{ echo \"ran $1\"; }}\nBASHPROF_TIME_CPS build step target\n",
-        String::from_utf8(stub.stdout).unwrap()
-    );
+/// The stub a client vendors, and the guard that decides whether it is
+/// installed. bashprof ships it as an asset, so the test reads the same file a
+/// client would copy.
+const POLYFILL: &str = include_str!("../assets/bashprof_polyfill.bash");
 
-    let scripts = Scripts::of(&[("build.bash", &build)]);
+const GUARD: &str = "declare -F BASHPROF_TIME_CPS >/dev/null || __define_bashprof_polyfill";
+
+/// A script whose call sites are guarded the way a shipped one's would be.
+fn vendoring() -> Scripts {
+    Scripts::of(&[
+        ("polyfill.bash", POLYFILL),
+        (
+            "build.bash",
+            &format!(
+                "source \"$(dirname \"${{BASH_SOURCE[0]}}\")/polyfill.bash\"\n{GUARD}\n\
+                 step() {{ echo \"ran $1\"; }}\n\
+                 BASHPROF_TIME_CPS build step target\n"
+            ),
+        ),
+    ])
+}
+
+/// Without the tool the guard installs the stub, so the call sites stay where
+/// they are and the calls they wrap still happen.
+#[test]
+fn the_vendored_stub_runs_an_instrumented_script_unprofiled() {
+    let scripts = vendoring();
     let ran = Command::new("bash").arg(scripts.at("build.bash")).output().expect("bash");
 
     assert_eq!(String::from_utf8(ran.stdout).unwrap(), "ran target\n");
     assert_eq!(ran.status.code(), Some(0));
+}
+
+/// The same script under the tool. `BASH_ENV` defines the real word before the
+/// script's first line, so the guard must find it and leave it alone — a stub
+/// that installed itself unconditionally would measure nothing, silently.
+#[test]
+fn the_guard_leaves_the_real_word_in_place_under_the_tool() {
+    let scripts = vendoring();
+    let ran = Command::new(BASHPROF)
+        .args(["--", "bash"])
+        .arg(scripts.at("build.bash"))
+        .output()
+        .expect("the built bashprof");
+
+    let measured = String::from_utf8(ran.stdout).unwrap();
+
+    assert_eq!(ran.status.code(), Some(0));
+    assert!(measured.contains("ran target"), "the subject still ran: {measured}");
+    assert!(measured.contains("build ") && measured.contains("µs of its own"),
+        "the vendored stub did not displace the real word: {measured}");
 }

@@ -6,16 +6,24 @@ use std::path::{Path, PathBuf};
 
 use super::instrument::{BASH, TRACE};
 use crate::bash::STACK;
-use super::{captures, instrument, BashCap, Capture, Tracing, Value, POLYFILL};
+use super::{captures, instrument, BashCap, Capture, Tracing, Value};
 use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig, Startup};
 
-/// A script that vendors the polyfill, as a shipped one would.
+/// The stub a client vendors. bashcap ships it as an asset rather than as a
+/// value of its own: whether it is installed is the client's decision, made by
+/// the guard below.
+const POLYFILL: &str = include_str!("../../assets/bashcap_polyfill.bash");
+
+const GUARD: &str = "declare -F BASHCAP >/dev/null || __define_bashcap_polyfill";
+
+/// A script that vendors the polyfill and guards it, as a shipped one would.
 fn script(temp: &Path, body: &str) -> PathBuf {
     let polyfill = temp.join("polyfill.bash");
     std::fs::write(&polyfill, POLYFILL).unwrap();
 
     let entry = temp.join("main.bash");
-    std::fs::write(&entry, format!("source {}\n{body}", polyfill.display())).unwrap();
+    let vendoring = format!("source {}\n{GUARD}\n", polyfill.display());
+    std::fs::write(&entry, format!("{vendoring}{body}")).unwrap();
     entry
 }
 
@@ -143,19 +151,43 @@ fn each_snapshot_is_written_as_it_arrives() {
     assert_eq!(rows[1]["notes"][0], "two");
 }
 
-/// Every piece rides into a shell — two through the prelude, the polyfill
-/// through the client's own script. None may put a name in the environment,
-/// where it would reach every process the subject starts.
+/// Every piece of bash bashcap authors ends up in someone's shell — three
+/// through the instrument, the polyfill through a client that vendored it.
+/// None may put a name in the environment, where it would reach every process
+/// the subject starts.
 #[test]
 fn no_shipped_bash_exports_a_name() {
     let shipped = [("stack.bash", STACK), ("bashcap.bash", BASH), ("trace.bash", TRACE),
-        ("polyfill.bash", POLYFILL)];
+        ("bashcap_polyfill.bash", POLYFILL)];
 
     for (whose, bash) in shipped {
         for line in bash.lines().filter(|line| !line.trim_start().starts_with('#')) {
             assert!(!line.contains("export "), "{whose}: {line}");
         }
     }
+}
+
+/// Without the tool the stub has to carry a real call site: the same leading
+/// flags are consumed and the continuation runs with its own arguments and
+/// returns its own status. A stub that left the flags alone would run
+/// `-BCV:absent` as a command.
+#[test]
+fn the_vendored_stub_carries_a_call_site_without_the_tool() {
+    let temp = tempfile::tempdir().unwrap();
+    let entry = script(
+        temp.path(),
+        r#"
+        step() { echo "ran $*"; return 7; }
+        BASHCAP -BCV:absent -BCS:"a note"
+        WITH_BASHCAP -BCV:absent -BCS:"a note" step one two
+        "#,
+    );
+
+    let ran = std::process::Command::new("bash").arg(entry).output().unwrap();
+
+    assert_eq!(String::from_utf8(ran.stderr).unwrap(), "", "no flag was run as a command");
+    assert_eq!(String::from_utf8(ran.stdout).unwrap(), "ran one two\n");
+    assert_eq!(ran.status.code(), Some(7), "the continuation's own status");
 }
 
 /// A subject that traces its own calls gets each frame's arguments, and one

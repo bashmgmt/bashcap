@@ -15,14 +15,19 @@ mkdir -p "$WORK"
 hr "build"
 ( cd "$ROOT" && cargo build --bin bashcap ) || exit 1
 
-hr "polyfill (what a client script vendors)"
-"$BIN" polyfill | sed 's/^/   /'
+hr "polyfill (what a client script vendors, and how it guards it)"
+ASSET="$ROOT/assets/bashcap_polyfill.bash"
+sed 's/^/   /' "$ASSET"
 
 VENDORED="$(dirname "$FIXTURE")/polyfill.bash"
-if [[ -f $VENDORED ]] && ! "$BIN" polyfill | diff -q - "$VENDORED" >/dev/null; then
-    printf '   %s has drifted from what bashcap ships\n' "$VENDORED"
+if [[ -f $VENDORED ]] && ! diff -q "$ASSET" "$VENDORED" >/dev/null; then
+    printf '   %s has drifted from %s\n' "$VENDORED" "$ASSET"
     exit 1
 fi
+
+hr "the same fixture without the tool — the guard installs the stub"
+bash "$FIXTURE" >/dev/null
+printf '   exited %s\n' "$?"
 
 hr "run"
 "$BIN" run --into "$WORK/capture.jsonl" -- bash "$FIXTURE"

@@ -3,6 +3,7 @@
 # numbers — edit freely.
 
 source "$(dirname "${BASH_SOURCE[0]}")/polyfill.bash"
+declare -F BASHCAP >/dev/null || __define_bashcap_polyfill
 
 declare -- greeting="hello world"
 declare -a items=(alpha "beta gamma")

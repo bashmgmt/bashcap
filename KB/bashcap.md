@@ -6,7 +6,7 @@ one subject per file:
 
 | | | |
 |---|---|---|
-| the instrument | `bashcap/instrument.rs`, `bashcap.bash`, `trace.bash`, `polyfill.bash` | the bash it ships, and the one function that composes what gets injected |
+| the instrument | `bashcap/instrument.rs`, `bashcap.bash`, `trace.bash` | the bash it injects, and the one function that composes it |
 | the record | `bashcap/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
 | the rendering | `bashcap/show.rs` | reading a written capture back, and the one `Display` of one |
 | the tool | `bashcap/mod.rs` | a rig whose session is a sink, and the JSON line format it owns |
@@ -21,7 +21,6 @@ full stack, and no command line in between.
 ```
 bashcap run --into FILE [--verbose] [--trace-calls] [--] <command…>
 bashcap show FILE
-bashcap polyfill
 ```
 
 `show` renders a capture through `Capture`'s `Display`, which is the same
@@ -30,19 +29,7 @@ one place.
 
 ## The client's side
 
-A script opts in by calling `BASHCAP`, and stays runnable without the tool by
-sourcing the polyfill:
-
-```bash
-if [[ -z "${BASHCAP__IS_RUNNING:-}" ]]; then
-    WITH_BASHCAP() { "$@"; }
-    BASHCAP() { true; }
-fi
-```
-
-Under the tool, the real definitions are already in place when the polyfill
-runs, so its `if` is false and the stubs are never installed. Outside it, both
-names resolve to no-ops, so instrumented call sites are safe to ship.
+A script opts in by calling `BASHCAP`:
 
 ```bash
 BASHCAP [-BCV:<var>]… [-BCS:<note>]…
@@ -53,6 +40,10 @@ WITH_BASHCAP [-BCV:<var>]… [-BCS:<note>]… <command> [args…]
 named `BASHCAP__CTX__*` is captured automatically, which is how ambient
 context rides along without being named at each site. `WITH_BASHCAP` is the
 CPS form: it snapshots, runs the continuation, and returns *its* status.
+
+Keeping those call sites runnable without the tool is the client's own, and
+`assets/bashcap_polyfill.bash` is what it vendors to do it — see
+[vendoring.md](vendoring.md).
 
 ## The instrument
 
@@ -106,8 +97,6 @@ pub enum Tracing { Off, Calls }
 /// The bash to put in a `Startup`, for any rig that wants what bashcap
 /// harvests. One way to compose it; `BASH` and `TRACE` are not public.
 pub fn instrument(tracing: Tracing) -> String;
-
-pub const POLYFILL: &str;  // polyfill.bash — a client vendors this
 
 pub struct Snapshot {
     pub frames: Vec<Frame>,
@@ -287,8 +276,9 @@ that calls `run`. Four properties of a transparent wrapper:
 make bashcap-demo [SCRIPT=path/to/your.bash]
 ```
 
-Builds the debug binary, emits the polyfill, runs
-`__fixtures/bashcap_demo/demo.bash` and renders it with `bashcap show`. The fixture
+Builds the debug binary, shows the vendored polyfill and checks it against the
+asset, runs `__fixtures/bashcap_demo/demo.bash` once with no tool and once
+under `bashcap run`, and renders the capture with `bashcap show`. The fixture
 exercises every facility in one file — typed variables, ambient context,
 `BASH_REMATCH`, nested frames with argv, the CPS form, a subshell and a child
 process — and nothing asserts its line numbers, counts or variable names, so

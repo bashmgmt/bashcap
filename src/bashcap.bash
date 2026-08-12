@@ -1,5 +1,3 @@
-BASHCAP__IS_RUNNING=1
-
 BASHCAP() {
     local IFS=' '
     local -a __bc_vars=()

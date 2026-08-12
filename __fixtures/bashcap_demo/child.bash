@@ -6,6 +6,7 @@
 shopt -s extdebug
 
 source "$(dirname "${BASH_SOURCE[0]}")/polyfill.bash"
+declare -F BASHCAP >/dev/null || __define_bashcap_polyfill
 
 child_work() {
     declare -a payload=(x y z)
