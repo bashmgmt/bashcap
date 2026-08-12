@@ -233,7 +233,7 @@ fn the_vendored_stub_runs_an_instrumented_script_unprofiled() {
 /// that installed itself unconditionally would measure nothing, silently.
 #[test]
 fn the_guard_leaves_the_real_word_in_place_under_the_tool() {
-    let ran = bashprof(&vendoring(), &[]);
+    let ran = bashprof(&vendoring(), &["--output=tree"]);
 
     assert_eq!(ran.status, Some(0));
     assert_eq!(ran.stdout, "ran target\n", "the subject still ran, and still owns stdout");
@@ -242,4 +242,19 @@ fn the_guard_leaves_the_real_word_in_place_under_the_tool() {
 
     assert_eq!(tree[0]["label"], "build", "the stub did not displace the real word: {tree:#}");
     assert!(tree[0]["ended"].as_u64() > tree[0]["began"].as_u64(), "{tree:#}");
+}
+
+/// The default is the measured tree written for a reader: one call per line,
+/// nested by indentation, with what each had to itself.
+#[test]
+fn the_default_reading_is_the_measured_tree_as_text() {
+    let ran = bashprof(&vendoring(), &[]);
+
+    assert_eq!(ran.status, Some(0));
+    assert!(
+        ran.into.starts_with("build ") && ran.into.contains("µs of its own"),
+        "{}",
+        ran.into
+    );
+    assert!(!ran.into.contains('{'), "text, not the JSON of the same reading: {}", ran.into);
 }
