@@ -44,8 +44,8 @@ impl fmt::Display for Capture {
         writeln!(
             f,
             "pid {} seq {} shlvl {} subshell {}",
-            self.pid,
-            self.seq,
+            self.sent.pid,
+            self.sent.seq,
             state("shlvl"),
             state("subshell")
         )?;

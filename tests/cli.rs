@@ -156,20 +156,25 @@ fn the_recorded_reading_keeps_the_call_that_never_ended() {
     assert_eq!(ran.status, Some(1), "still the subject's own code");
 
     let tree: serde_json::Value = serde_json::from_str(&ran.into).expect("a JSON tree");
-    let states: Vec<(&str, &str, bool)> = tree
+    let states: Vec<(String, String)> = tree
         .as_array()
         .expect("an array of roots")
         .iter()
         .map(|node| {
-            (
-                node["call"]["label"].as_str().unwrap(),
-                node["state"].as_str().unwrap(),
-                node.get("ended").is_some(),
-            )
+            let (state, body) = node["record"].as_object().unwrap().iter().next().unwrap();
+            let call = body.get("call").unwrap_or(body);
+
+            (call["label"].as_str().unwrap().to_string(), state.clone())
         })
         .collect();
 
-    assert_eq!(states, [("ok", "ended", true), ("doomed", "unended", false)], "{tree:#}");
+    assert_eq!(
+        states,
+        [("ok".to_string(), "ended".to_string()), ("doomed".to_string(), "unended".to_string())],
+        "{tree:#}"
+    );
+    assert_eq!(tree[0]["record"]["ended"]["status"], 0, "what the measured command returned");
+    assert!(tree[1]["record"]["unended"].get("ended_at").is_none(), "no END, so no end");
 }
 
 /// Before any of it is read as calls: one JSON object per line, each the
@@ -239,9 +244,11 @@ fn the_guard_leaves_the_real_word_in_place_under_the_tool() {
     assert_eq!(ran.stdout, "ran target\n", "the subject still ran, and still owns stdout");
 
     let tree: serde_json::Value = serde_json::from_str(&ran.into).expect("a JSON tree");
+    let top = &tree["roots"][0]["complete"];
 
-    assert_eq!(tree[0]["label"], "build", "the stub did not displace the real word: {tree:#}");
-    assert!(tree[0]["ended"].as_u64() > tree[0]["began"].as_u64(), "{tree:#}");
+    assert_eq!(top["call"]["label"], "build", "the stub did not displace it: {tree:#}");
+    assert_eq!(top["call"]["argv"], serde_json::json!(["step", "target"]), "{tree:#}");
+    assert!(top["ended_at"].as_u64() > top["call"]["sent"]["sent_at"].as_u64(), "{tree:#}");
 }
 
 /// A stack is not the tree and cannot be read off it: an unmeasured function
@@ -264,43 +271,55 @@ fn a_measurement_carries_the_whole_stack_it_was_made_on() {
     let ran = bashprof(&scripts, &["--output=tree"]);
     let tree: serde_json::Value = serde_json::from_str(&ran.into).expect("a JSON tree");
 
+    // A frame is a named function, or one of bash's two words for a file's
+    // own top level.
+    fn site(frame: &serde_json::Value) -> String {
+        match &frame["site"] {
+            serde_json::Value::String(word) => word.clone(),
+            named => named["function"].as_str().unwrap().to_string(),
+        }
+    }
+
     let named = |node: &serde_json::Value| -> Vec<String> {
-        node["stack"]
+        node["complete"]["call"]["stack"]
             .as_array()
             .expect("one array of frames")
             .iter()
-            .map(|frame| frame["funcname"].as_str().unwrap().to_string())
+            .map(site)
             .collect()
     };
 
     // The instrument's own frames are in the walk and are not the subject's,
     // so they are named but carry no line of this script.
     let sited = |node: &serde_json::Value| -> Vec<(String, u64)> {
-        node["stack"]
+        node["complete"]["call"]["stack"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|frame| frame["source"].as_str().unwrap().ends_with("build.bash"))
-            .map(|frame| {
-                (frame["funcname"].as_str().unwrap().to_string(), frame["lineno"].as_u64().unwrap())
+            .filter(|frame| {
+                frame["source"]["file"].as_str().unwrap().ends_with("build.bash")
             })
+            .map(|frame| (site(frame), frame["lineno"].as_u64().unwrap()))
             .collect()
     };
 
-    let top = &tree[0];
+    let top = &tree["roots"][0];
     let inner = &top["children"][0];
+    fn label(node: &serde_json::Value) -> &str {
+        node["complete"]["call"]["label"].as_str().unwrap()
+    }
 
-    assert_eq!((top["label"].as_str(), inner["label"].as_str()), (Some("top"), Some("inner")));
+    assert_eq!((label(top), label(inner)), ("top", "inner"));
 
-    assert_eq!(sited(top), [("main".to_string(), 5)], "the outermost call site: {tree:#}");
+    assert_eq!(sited(top), [("script".to_string(), 5)], "the outermost call site: {tree:#}");
     assert_eq!(
         named(inner),
-        ["mid", "between", "BASHPROF_TIME_CPS", "main"],
+        ["mid", "between", "BASHPROF_TIME_CPS", "script"],
         "`between` is on the stack and nowhere in the tree: {tree:#}"
     );
     assert_eq!(
         sited(inner),
-        [("mid".to_string(), 2), ("between".to_string(), 3), ("main".to_string(), 5)],
+        [("mid".to_string(), 2), ("between".to_string(), 3), ("script".to_string(), 5)],
         "each frame at the line it is executing, innermost first: {tree:#}"
     );
 }

@@ -81,7 +81,7 @@ fn show(from: &Path) -> Result<(), Failure> {
     let reading = || format!("reading {}", from.display());
     let seen = captures(&std::fs::read_to_string(from).doing(reading)?).doing(reading)?;
 
-    let shells: HashSet<u32> = seen.iter().map(|capture| capture.pid).collect();
+    let shells: HashSet<u32> = seen.iter().map(|capture| capture.sent.pid.0).collect();
     println!("{} snapshots from {} shells\n", seen.len(), shells.len());
 
     for (at, capture) in seen.iter().enumerate() {

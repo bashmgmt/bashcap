@@ -4,7 +4,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::bash::rig::{field, Doing, Failure, Line};
+use crate::bash::rig::{field, Doing, Failure, Line, Sent};
 use crate::bash::stack::{Columns, Stack};
 use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
@@ -64,12 +64,7 @@ pub struct Snapshot {
 /// output format — one per line — and what `bashcap show` reads back.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capture {
-    pub sent_at: u64,
-    pub heard_at: u64,
-    pub pid: u32,
-    pub seq: u32,
-
-    #[serde(flatten)]
+    pub sent: Sent,
     pub snapshot: Snapshot,
 }
 
@@ -80,13 +75,7 @@ impl Capture {
     pub fn of(line: &Line) -> Option<Result<Self, Failure>> {
         let sections = line.behind(TAG)?;
 
-        Some(Snapshot::decode(sections).map(|snapshot| Self {
-            sent_at: line.sent_at.0,
-            heard_at: line.heard_at.0,
-            pid: line.pid.0,
-            seq: line.seq,
-            snapshot,
-        }))
+        Some(Snapshot::decode(sections).map(|snapshot| Self { sent: line.sent.clone(), snapshot }))
     }
 }
 

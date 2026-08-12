@@ -45,7 +45,7 @@ impl Rig for Decoding {
     fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Failure> {
         let Some(decoded) = Capture::of(&said) else { return Ok(()) };
 
-        seen.push(decoded.doing(|| format!("a snapshot from pid {}", said.pid))?);
+        seen.push(decoded.doing(|| format!("a snapshot from pid {}", said.sent.pid))?);
 
         Ok(())
     }
@@ -87,9 +87,9 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert_eq!(snaps.len(), 2);
 
     let deep = &snaps[0].snapshot;
-    let names: Vec<&str> = deep.stack.frames().map(|frame| frame.funcname.as_str()).collect();
+    let names: Vec<String> = deep.stack.frames().map(|frame| frame.site.to_string()).collect();
     assert_eq!(names, ["inner", "outer", "main"]);
-    assert!(deep.stack.at().source.ends_with("main.bash"));
+    assert_eq!(deep.stack.at().source.to_string(), "main.bash", "the file, absolute underneath");
     assert!(deep.stack.at().lineno > 0);
 
     assert_eq!(deep.vars["greeting"].value, Value::Scalar("hello world".into()));
@@ -108,7 +108,7 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert!(deep.state.contains_key("shlvl") && deep.state.contains_key("flags"));
 
     let wrapped = &snaps[1].snapshot;
-    assert_eq!(wrapped.stack.at().funcname, "WITH_BASHCAP");
+    assert_eq!(wrapped.stack.at().site.to_string(), "WITH_BASHCAP");
     assert_eq!(wrapped.notes, ["before step"]);
 }
 
@@ -142,13 +142,13 @@ fn each_snapshot_is_written_as_it_arrives() {
 
     assert_eq!(rows.len(), 2);
     for row in &rows {
-        for key in ["sent_at", "heard_at", "pid", "seq", "stack", "state"] {
-            assert!(row.get(key).is_some(), "{key} missing from {row}");
+        assert!(row["sent"]["pid"].is_u64(), "provenance is its own object: {row}");
+        for key in ["stack", "state"] {
+            assert!(row["snapshot"].get(key).is_some(), "{key} missing from {row}");
         }
-        assert!(row["pid"].is_u64(), "provenance is bare, not nested");
     }
-    assert_eq!(rows[0]["notes"][0], "one");
-    assert_eq!(rows[1]["notes"][0], "two");
+    assert_eq!(rows[0]["snapshot"]["notes"][0], "one");
+    assert_eq!(rows[1]["snapshot"]["notes"][0], "two");
 }
 
 /// Every piece of bash bashcap authors ends up in someone's shell — three
@@ -360,5 +360,5 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
         ],
         "the switch reached the child process too"
     );
-    assert_ne!(traced[0].pid, traced[1].pid, "two shells, not one");
+    assert_ne!(traced[0].sent.pid, traced[1].sent.pid, "two shells, not one");
 }

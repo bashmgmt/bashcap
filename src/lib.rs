@@ -71,7 +71,7 @@ impl Rig for BashCap {
     /// so ordering downstream is exact and is `sort`'s job.
     fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> {
         let Some(decoded) = Capture::of(&said) else { return Ok(()) };
-        let at = || format!("a snapshot from pid {}", said.pid);
+        let at = || format!("a snapshot from pid {}", said.sent.pid);
 
         let json = serde_json::to_string(&decoded.doing(at)?).doing(at)?;
         writeln!(session.sink, "{json}").doing(|| self.writing_to())?;
