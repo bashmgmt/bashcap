@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::bash::rig::{field, Doing, Failure, Line};
-use crate::bash::stack::{Columns, Frame};
+use crate::bash::stack::{Columns, Stack};
 use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
 /// The word every snapshot message begins with, and the one thing that tells
@@ -49,7 +49,7 @@ pub struct Captured {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
-    pub frames: Vec<Frame>,
+    pub stack: Stack,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub state: IndexMap<String, String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -92,7 +92,7 @@ impl Capture {
 
 impl Snapshot {
     fn decode(sections: &[String]) -> Result<Self, Failure> {
-        let frames = Columns::of(sections)?.frames()?;
+        let stack = Columns::of(sections)?.frames()?;
 
         let state = flat(sections, "state")?
             .chunks_exact(2)
@@ -105,7 +105,7 @@ impl Snapshot {
             .collect::<Result<IndexMap<_, _>, _>>()?;
 
         Ok(Self {
-            frames,
+            stack,
             state,
             rematch: flat(sections, "rematch")?,
             vars,

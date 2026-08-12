@@ -244,6 +244,67 @@ fn the_guard_leaves_the_real_word_in_place_under_the_tool() {
     assert!(tree[0]["ended"].as_u64() > tree[0]["began"].as_u64(), "{tree:#}");
 }
 
+/// A stack is not the tree and cannot be read off it: an unmeasured function
+/// between two measured calls is a frame and not a node. So every measurement
+/// carries the walk its own shell took, and its first frame is the call site
+/// of that measurement.
+#[test]
+fn a_measurement_carries_the_whole_stack_it_was_made_on() {
+    // Line 2 is where `inner` is measured, 3 where `mid` is called, 5 where
+    // `top` is measured.
+    let scripts = Scripts::of(&[(
+        "build.bash",
+        r#"leaf()    { :; }
+        mid()     { BASHPROF_TIME_CPS inner leaf; }
+        between() { mid; }
+
+        BASHPROF_TIME_CPS top between
+        "#,
+    )]);
+    let ran = bashprof(&scripts, &["--output=tree"]);
+    let tree: serde_json::Value = serde_json::from_str(&ran.into).expect("a JSON tree");
+
+    let named = |node: &serde_json::Value| -> Vec<String> {
+        node["stack"]
+            .as_array()
+            .expect("one array of frames")
+            .iter()
+            .map(|frame| frame["funcname"].as_str().unwrap().to_string())
+            .collect()
+    };
+
+    // The instrument's own frames are in the walk and are not the subject's,
+    // so they are named but carry no line of this script.
+    let sited = |node: &serde_json::Value| -> Vec<(String, u64)> {
+        node["stack"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|frame| frame["source"].as_str().unwrap().ends_with("build.bash"))
+            .map(|frame| {
+                (frame["funcname"].as_str().unwrap().to_string(), frame["lineno"].as_u64().unwrap())
+            })
+            .collect()
+    };
+
+    let top = &tree[0];
+    let inner = &top["children"][0];
+
+    assert_eq!((top["label"].as_str(), inner["label"].as_str()), (Some("top"), Some("inner")));
+
+    assert_eq!(sited(top), [("main".to_string(), 5)], "the outermost call site: {tree:#}");
+    assert_eq!(
+        named(inner),
+        ["mid", "between", "BASHPROF_TIME_CPS", "main"],
+        "`between` is on the stack and nowhere in the tree: {tree:#}"
+    );
+    assert_eq!(
+        sited(inner),
+        [("mid".to_string(), 2), ("between".to_string(), 3), ("main".to_string(), 5)],
+        "each frame at the line it is executing, innermost first: {tree:#}"
+    );
+}
+
 /// The default is the measured tree written for a reader: one call per line,
 /// nested by indentation, with what each had to itself.
 #[test]

@@ -13,7 +13,7 @@ use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
-pub use crate::bash::stack::Frame;
+pub use crate::bash::stack::{Frame, Stack};
 pub use snapshot::{Capture, Captured, Snapshot, Value};
 
 #[cfg(test)]

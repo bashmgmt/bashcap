@@ -87,10 +87,10 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert_eq!(snaps.len(), 2);
 
     let deep = &snaps[0].snapshot;
-    let names: Vec<&str> = deep.frames.iter().map(|frame| frame.funcname.as_str()).collect();
+    let names: Vec<&str> = deep.stack.frames().map(|frame| frame.funcname.as_str()).collect();
     assert_eq!(names, ["inner", "outer", "main"]);
-    assert!(deep.frames[0].source.ends_with("main.bash"));
-    assert!(deep.frames[0].lineno > 0);
+    assert!(deep.stack.at().source.ends_with("main.bash"));
+    assert!(deep.stack.at().lineno > 0);
 
     assert_eq!(deep.vars["greeting"].value, Value::Scalar("hello world".into()));
     assert_eq!(deep.vars["items"].attrs, "a");
@@ -108,7 +108,7 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert!(deep.state.contains_key("shlvl") && deep.state.contains_key("flags"));
 
     let wrapped = &snaps[1].snapshot;
-    assert_eq!(wrapped.frames[0].funcname, "WITH_BASHCAP");
+    assert_eq!(wrapped.stack.at().funcname, "WITH_BASHCAP");
     assert_eq!(wrapped.notes, ["before step"]);
 }
 
@@ -142,7 +142,7 @@ fn each_snapshot_is_written_as_it_arrives() {
 
     assert_eq!(rows.len(), 2);
     for row in &rows {
-        for key in ["sent_at", "heard_at", "pid", "seq", "frames", "state"] {
+        for key in ["sent_at", "heard_at", "pid", "seq", "stack", "state"] {
             assert!(row.get(key).is_some(), "{key} missing from {row}");
         }
         assert!(row["pid"].is_u64(), "provenance is bare, not nested");
@@ -203,15 +203,15 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
 
     let bare = capture(body);
     assert!(
-        bare[0].snapshot.frames.iter().all(|frame| frame.args.is_none()),
+        bare[0].snapshot.stack.frames().all(|frame| frame.args.is_none()),
         "an ordinary shell records none, and says so"
     );
 
     let traced = capture(&format!("shopt -s extdebug\n{body}"));
     let called: Vec<&[String]> = traced[0]
         .snapshot
-        .frames
-        .iter()
+        .stack
+        .frames()
         .map(|frame| frame.args.as_deref().expect("the shell was recording"))
         .collect();
 
@@ -220,7 +220,7 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
     // every frame's group.
     assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
 
-    let shown = traced[0].snapshot.frames[0].to_string();
+    let shown = traced[0].snapshot.stack.at().to_string();
     assert!(
         shown.ends_with(" ('d one' $'d\\ntwo')"),
         "rendered as the bash that would pass them, newline and all: {shown}"
@@ -250,7 +250,7 @@ fn a_written_capture_reads_back_whole() {
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 
     assert_eq!(read.len(), 1);
-    assert_eq!(read[0].snapshot.frames[0].args.as_deref(), Some(["arg".to_string()].as_slice()));
+    assert_eq!(read[0].snapshot.stack.at().args.as_deref(), Some(["arg".to_string()].as_slice()));
     assert!(read[0].to_string().contains("f@main.bash"), "{}", read[0]);
 }
 
@@ -292,7 +292,7 @@ fn the_walk_survives_the_subjects_own_shell_options() {
     );
 
     assert_eq!(snaps.len(), 2, "the script ran on past the first snapshot");
-    assert_eq!(snaps[0].snapshot.frames[0].args, Some(Vec::new()), "f was called with none");
+    assert_eq!(snaps[0].snapshot.stack.at().args, Some(Vec::new()), "f was called with none");
     assert_eq!(snaps[1].snapshot.notes, ["after"]);
 }
 
@@ -335,7 +335,7 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     let bare = ran(BashCap::writing(&plain), &plain);
     assert_eq!(bare.len(), 2, "one snapshot from each shell");
     assert!(
-        bare.iter().flat_map(|seen| &seen.snapshot.frames).all(|frame| frame.args.is_none()),
+        bare.iter().flat_map(|seen| seen.snapshot.stack.frames()).all(|frame| frame.args.is_none()),
         "nothing records call arguments unless the tool is asked to"
     );
 
@@ -345,8 +345,8 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
         .iter()
         .map(|seen| {
             seen.snapshot
-                .frames
-                .iter()
+                .stack
+                .frames()
                 .map(|frame| frame.args.as_deref().expect("asked for, so recorded"))
                 .collect()
         })

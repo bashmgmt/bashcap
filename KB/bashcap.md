@@ -99,7 +99,7 @@ pub enum Tracing { Off, Calls }
 pub fn instrument(tracing: Tracing) -> String;
 
 pub struct Snapshot {
-    pub frames: Vec<Frame>,
+    pub stack: Stack,
     pub state: IndexMap<String, String>,
     pub rematch: Vec<String>,
     pub vars: IndexMap<String, Captured>,

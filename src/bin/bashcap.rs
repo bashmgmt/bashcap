@@ -109,9 +109,7 @@ fn capture(
         eprintln!("bashcap: {} snapshots -> {}", ran.session.written, into.display());
     }
 
-    // The subject's own status either way: it was seen out even when the
-    // capture broke, and a wrapper that reported its own trouble as the
-    // subject's would not be transparent.
+    // The subject's own status either way: it was seen out to the end.
     if let Some(why) = ran.failed {
         eprintln!("bashcap: {why}");
     }

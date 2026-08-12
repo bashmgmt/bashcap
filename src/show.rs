@@ -50,7 +50,7 @@ impl fmt::Display for Capture {
             state("subshell")
         )?;
 
-        for frame in &self.snapshot.frames {
+        for frame in self.snapshot.stack.frames() {
             writeln!(f, "    at    {frame}")?;
         }
         for note in &self.snapshot.notes {
