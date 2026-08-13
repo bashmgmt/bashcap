@@ -2,26 +2,22 @@
 
 use crate::bash::rig::{ExitStatus, Master};
 use crate::bashcap::{captures, BashCap};
+use crate::tests::scripts::bash;
 
-use super::script;
+use super::{script, ENTRY};
 
 #[test]
 fn each_snapshot_is_written_as_it_arrives() {
-    let temp = tempfile::tempdir().unwrap();
-    let into = temp.path().join("out.jsonl");
-    let entry = script(
-        temp.path(),
+    let scripts = script(
         r#"
         BASHCAP -BCS:one
         BASHCAP -BCS:two
         "#,
     );
+    let into = scripts.at("out.jsonl");
 
     let (capturing, status) =
-        BashCap::writing(&into).run(&["bash".into(), entry.into_os_string()])
-            .unwrap()
-            .whole()
-            .unwrap();
+        BashCap::writing(&into).run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
     assert_eq!(capturing.written, 2);
     assert_eq!(status, ExitStatus::Code(0));
 
@@ -44,21 +40,16 @@ fn each_snapshot_is_written_as_it_arrives() {
 
 #[test]
 fn a_written_capture_reads_back_whole() {
-    let temp = tempfile::tempdir().unwrap();
-    let into = temp.path().join("out.jsonl");
-    let entry = script(
-        temp.path(),
+    let scripts = script(
         r#"
         shopt -s extdebug
         f() { BASHCAP -BCS:one; }
         f arg
         "#,
     );
+    let into = scripts.at("out.jsonl");
 
-    BashCap::writing(&into).run(&["bash".into(), entry.into_os_string()])
-        .unwrap()
-        .whole()
-        .unwrap();
+    BashCap::writing(&into).run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
 
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 

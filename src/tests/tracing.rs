@@ -3,10 +3,11 @@
 
 use std::path::Path;
 
-use crate::bashcap::{captures, BashCap};
 use crate::bash::rig::Master;
+use crate::bashcap::{captures, BashCap};
+use crate::tests::scripts::bash;
 
-use super::{capture, script};
+use super::{capture, script, ENTRY};
 
 #[test]
 fn call_arguments_arrive_where_the_shell_was_recording_them() {
@@ -44,10 +45,15 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
 
 #[test]
 fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
-    let temp = tempfile::tempdir().unwrap();
-    let child = temp.path().join("child.bash");
+    let scripts = script(
+        r#"
+        outer() { BASHCAP -BCS:top; }
+        outer 'at the top'
+        bash "${BASH_SOURCE[0]%/*}/child.bash"
+        "#,
+    );
     std::fs::write(
-        &child,
+        scripts.at("child.bash"),
         r#"
         deep() { BASHCAP -BCS:child; }
         deep 'in a child'
@@ -55,25 +61,13 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     )
     .unwrap();
 
-    let entry = script(
-        temp.path(),
-        &format!(
-            r#"
-            outer() {{ BASHCAP -BCS:top; }}
-            outer 'at the top'
-            bash {}
-            "#,
-            child.display()
-        ),
-    );
-
     let ran = |tool: BashCap, into: &Path| {
-        tool.run(&["bash".into(), entry.clone().into_os_string()]).unwrap().whole().unwrap();
+        tool.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
 
         captures(&std::fs::read_to_string(into).unwrap()).unwrap()
     };
 
-    let plain = temp.path().join("plain.jsonl");
+    let plain = scripts.at("plain.jsonl");
     let bare = ran(BashCap::writing(&plain), &plain);
     assert_eq!(bare.len(), 2, "one snapshot from each shell");
     assert!(
@@ -81,7 +75,7 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
         "nothing records call arguments unless the tool is asked to"
     );
 
-    let full = temp.path().join("traced.jsonl");
+    let full = scripts.at("traced.jsonl");
     let traced = ran(BashCap::writing(&full).tracing_calls(), &full);
     let called: Vec<Vec<&[String]>> = traced
         .iter()

@@ -5,13 +5,11 @@ use crate::bash;
 use crate::bash::stack;
 use crate::bashcap::instrument::{EFFECT, TRACE, WORDS};
 
-use super::script;
+use super::{script, ENTRY};
 
 #[test]
 fn the_vendored_words_carry_a_call_site_without_the_tool() {
-    let temp = tempfile::tempdir().unwrap();
-    let entry = script(
-        temp.path(),
+    let scripts = script(
         r#"
         step() { echo "ran $*"; return 7; }
         BASHCAP -BCV:absent -BCS:"a note"
@@ -19,7 +17,7 @@ fn the_vendored_words_carry_a_call_site_without_the_tool() {
         "#,
     );
 
-    let ran = std::process::Command::new("bash").arg(entry).output().unwrap();
+    let ran = std::process::Command::new("bash").arg(scripts.at(ENTRY)).output().unwrap();
 
     assert_eq!(String::from_utf8(ran.stderr).unwrap(), "", "no flag was run as a command");
     assert_eq!(String::from_utf8(ran.stdout).unwrap(), "ran one two\n");
