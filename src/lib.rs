@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::bash::rig::{Doing, Failure, Halt, Line, Master, Rig, Slave};
+use crate::bash::rig::{Doing, Failure, Line, Master, Rig, Slave};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
@@ -68,7 +68,7 @@ impl Rig for BashCap {
 
     /// One JSON object per line, in arrival order. Each carries both clocks,
     /// so ordering downstream is exact and is `sort`'s job.
-    fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Halt> {
+    fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> {
         let Some(decoded) = Capture::of(&said) else { return Ok(()) };
         let at = || format!("a snapshot from pid {}", said.sent.pid);
 

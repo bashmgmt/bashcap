@@ -16,7 +16,7 @@ mod writing;
 
 use std::path::{Path, PathBuf};
 
-use crate::bash::rig::{Doing, Failure, Halt, Line, Master, Rig};
+use crate::bash::rig::{Doing, Failure, Line, Master, Rig};
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
 
@@ -51,7 +51,7 @@ impl Rig for Decoding {
         Ok(Vec::new())
     }
 
-    fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Halt> {
+    fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Failure> {
         let Some(decoded) = Capture::of(&said) else { return Ok(()) };
 
         seen.push(decoded.doing(|| format!("a snapshot from pid {}", said.sent.pid))?);
