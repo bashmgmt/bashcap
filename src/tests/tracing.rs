@@ -1,0 +1,106 @@
+//! Call arguments: bash records them only under `extdebug`, so a frame
+//! either has them or says it was never told.
+
+use std::path::Path;
+
+use crate::bashcap::{captures, BashCap};
+use crate::bash::rig::run;
+
+use super::{capture, script};
+
+#[test]
+fn call_arguments_arrive_where_the_shell_was_recording_them() {
+    let body = r#"
+        deep() { BASHCAP -BCS:"at the bottom"; }
+        mid()  { deep "d one" $'d\ntwo'; }
+        mid "m one"
+        "#;
+
+    let bare = capture(body);
+    assert!(
+        bare[0].snapshot.stack.frames().all(|frame| frame.args.is_none()),
+        "an ordinary shell records none, and says so"
+    );
+
+    let traced = capture(&format!("shopt -s extdebug\n{body}"));
+    let called: Vec<&[String]> = traced[0]
+        .snapshot
+        .stack
+        .frames()
+        .map(|frame| frame.args.as_deref().expect("the shell was recording"))
+        .collect();
+
+    // The two instrument frames are not reported, but their own arguments
+    // still sit in the flat `BASH_ARGV` stack; miscounting them would shift
+    // every frame's group.
+    assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
+
+    let shown = traced[0].snapshot.stack.at().to_string();
+    assert!(
+        shown.ends_with(" ('d one' $'d\\ntwo')"),
+        "rendered as the bash that would pass them, newline and all: {shown}"
+    );
+}
+
+#[test]
+fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let child = temp.path().join("child.bash");
+    std::fs::write(
+        &child,
+        r#"
+        deep() { BASHCAP -BCS:child; }
+        deep 'in a child'
+        "#,
+    )
+    .unwrap();
+
+    let entry = script(
+        temp.path(),
+        &format!(
+            r#"
+            outer() {{ BASHCAP -BCS:top; }}
+            outer 'at the top'
+            bash {}
+            "#,
+            child.display()
+        ),
+    );
+
+    let ran = |tool: BashCap, into: &Path| {
+        run(&tool, &["bash".into(), entry.clone().into_os_string()]).unwrap().whole().unwrap();
+
+        captures(&std::fs::read_to_string(into).unwrap()).unwrap()
+    };
+
+    let plain = temp.path().join("plain.jsonl");
+    let bare = ran(BashCap::writing(&plain), &plain);
+    assert_eq!(bare.len(), 2, "one snapshot from each shell");
+    assert!(
+        bare.iter().flat_map(|seen| seen.snapshot.stack.frames()).all(|frame| frame.args.is_none()),
+        "nothing records call arguments unless the tool is asked to"
+    );
+
+    let full = temp.path().join("traced.jsonl");
+    let traced = ran(BashCap::writing(&full).tracing_calls(), &full);
+    let called: Vec<Vec<&[String]>> = traced
+        .iter()
+        .map(|seen| {
+            seen.snapshot
+                .stack
+                .frames()
+                .map(|frame| frame.args.as_deref().expect("asked for, so recorded"))
+                .collect()
+        })
+        .collect();
+
+    assert_eq!(
+        called,
+        [
+            [["at the top"].as_slice(), [].as_slice()],
+            [["in a child"].as_slice(), [].as_slice()],
+        ],
+        "the switch reached the child process too"
+    );
+    assert_ne!(traced[0].sent.pid, traced[1].sent.pid, "two shells, not one");
+}
