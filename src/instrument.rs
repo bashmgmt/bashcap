@@ -1,5 +1,7 @@
 //! The bash bashcap injects into a subject's shells.
 
+use crate::bash::stack;
+
 /// `BASHCAP` and `WITH_BASHCAP`, in every shell. Reached through
 /// [`instrument`], which is the one way to compose what gets injected.
 pub(crate) const BASH: &str = include_str!("bashcap.bash");
@@ -20,15 +22,11 @@ pub enum Tracing {
 }
 
 /// The bash to put in a [`Startup`](crate::bash::rig::Startup), for any rig
-/// that wants what bashcap harvests.
-///
-/// The frame walk is [`bash::STACK`](crate::bash::STACK), which bashcap shares
-/// with every other instrument that reports a stack.
+/// that wants what bashcap harvests. The frame walk comes with it, since a
+/// snapshot reports one.
 pub fn instrument(tracing: Tracing) -> String {
-    let stack = crate::bash::STACK;
-
     match tracing {
-        Tracing::Off => format!("{stack}\n{BASH}"),
-        Tracing::Calls => format!("{stack}\n{BASH}\n{TRACE}"),
+        Tracing::Off => stack::with(&[BASH]),
+        Tracing::Calls => stack::with(&[BASH, TRACE]),
     }
 }

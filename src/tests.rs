@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use super::instrument::{BASH, TRACE};
-use crate::bash::STACK;
+use crate::bash::stack;
 use super::{captures, instrument, BashCap, Capture, Tracing, Value};
 use crate::bash::rig::{run, Doing, ExitStatus, Failure, Line, Rig, Startup};
 
@@ -157,8 +157,9 @@ fn each_snapshot_is_written_as_it_arrives() {
 /// the subject starts.
 #[test]
 fn no_shipped_bash_exports_a_name() {
-    let shipped = [("stack.bash", STACK), ("bashcap.bash", BASH), ("trace.bash", TRACE),
-        ("bashcap_polyfill.bash", POLYFILL)];
+    let walk = stack::with(&[]);
+    let shipped = [("stack.bash", walk.as_str()), ("bashcap.bash", BASH),
+        ("trace.bash", TRACE), ("bashcap_polyfill.bash", POLYFILL)];
 
     for (whose, bash) in shipped {
         for line in bash.lines().filter(|line| !line.trim_start().starts_with('#')) {
