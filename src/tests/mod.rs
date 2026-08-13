@@ -16,23 +16,22 @@ mod writing;
 
 use std::path::{Path, PathBuf};
 
-use crate::bash::rig::{run, Doing, Failure, Line, Rig, Startup};
+use crate::bash::rig::{Doing, Failure, Halt, Line, Master, Rig};
+use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
 
-/// The stub a client vendors. bashcap ships it as an asset rather than as a
-/// value of its own: whether it is installed is the client's decision, made by
-/// the guard below.
-const POLYFILL: &str = include_str!("../../../assets/bashcap_polyfill.bash");
+/// The one line a client writes. It names the hook rather than the words, so a
+/// client cannot displace the real ones whichever order the two arrive in.
+const GUARD: &str = "declare -F __bc_capture >/dev/null || __bc_capture() { :; }";
 
-const GUARD: &str = "declare -F BASHCAP >/dev/null || __define_bashcap_polyfill";
-
-/// A script that vendors the polyfill and guards it, as a shipped one would.
+/// A script that vendors the words and guards them, as a shipped one would.
+/// What it sources is the file the tool injects, byte for byte.
 fn script(temp: &Path, body: &str) -> PathBuf {
-    let polyfill = temp.join("polyfill.bash");
-    std::fs::write(&polyfill, POLYFILL).unwrap();
+    let words = temp.join("bashcap.bash");
+    std::fs::write(&words, WORDS).unwrap();
 
     let entry = temp.join("main.bash");
-    let vendoring = format!("source {}\n{GUARD}\n", polyfill.display());
+    let vendoring = format!("source {}\n{GUARD}\n", words.display());
     std::fs::write(&entry, format!("{vendoring}{body}")).unwrap();
     entry
 }
@@ -44,15 +43,15 @@ struct Decoding;
 impl Rig for Decoding {
     type Session = Vec<Capture>;
 
-    fn startup(&self) -> Startup {
-        Startup { bash: instrument(Tracing::Off), ..Default::default() }
+    fn bash(&self) -> String {
+        instrument(Tracing::Off)
     }
 
     fn open(&self) -> Result<Self::Session, Failure> {
         Ok(Vec::new())
     }
 
-    fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Failure> {
+    fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Halt> {
         let Some(decoded) = Capture::of(&said) else { return Ok(()) };
 
         seen.push(decoded.doing(|| format!("a snapshot from pid {}", said.sent.pid))?);
@@ -61,9 +60,11 @@ impl Rig for Decoding {
     }
 }
 
+impl Master for Decoding {}
+
 fn capture(body: &str) -> Vec<Capture> {
     let temp = tempfile::tempdir().unwrap();
-    let ran = run(&Decoding, &["bash".into(), script(temp.path(), body).into_os_string()]).unwrap();
+    let ran = Decoding.run(&["bash".into(), script(temp.path(), body).into_os_string()]).unwrap();
 
     ran.whole().unwrap().0
 }

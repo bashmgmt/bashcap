@@ -15,17 +15,17 @@ mkdir -p "$WORK"
 hr "build"
 ( cd "$ROOT" && cargo build --bin bashcap ) || exit 1
 
-hr "polyfill (what a client script vendors, and how it guards it)"
-ASSET="$ROOT/assets/bashcap_polyfill.bash"
+hr "the words (what a client script vendors, and how it guards it)"
+ASSET="$ROOT/assets/bashcap.bash"
 sed 's/^/   /' "$ASSET"
 
-VENDORED="$(dirname "$FIXTURE")/polyfill.bash"
+VENDORED="$(dirname "$FIXTURE")/bashcap.bash"
 if [[ -f $VENDORED ]] && ! diff -q "$ASSET" "$VENDORED" >/dev/null; then
     printf '   %s has drifted from %s\n' "$VENDORED" "$ASSET"
     exit 1
 fi
 
-hr "the same fixture without the tool — the guard installs the stub"
+hr "the same fixture without the tool — the guard installs an empty hook"
 bash "$FIXTURE" >/dev/null
 printf '   exited %s\n' "$?"
 

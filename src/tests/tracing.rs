@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::bashcap::{captures, BashCap};
-use crate::bash::rig::run;
+use crate::bash::rig::Master;
 
 use super::{capture, script};
 
@@ -68,7 +68,7 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     );
 
     let ran = |tool: BashCap, into: &Path| {
-        run(&tool, &["bash".into(), entry.clone().into_os_string()]).unwrap().whole().unwrap();
+        tool.run(&["bash".into(), entry.clone().into_os_string()]).unwrap().whole().unwrap();
 
         captures(&std::fs::read_to_string(into).unwrap()).unwrap()
     };

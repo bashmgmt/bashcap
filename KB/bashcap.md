@@ -6,7 +6,7 @@ one subject per file:
 
 | | | |
 |---|---|---|
-| the instrument | `bashcap/instrument.rs`, `bashcap.bash`, `trace.bash` | the bash it injects, and the one function that composes it |
+| the instrument | `bashcap/instrument.rs`, `assets/bashcap.bash`, `bashcap/effect.bash`, `trace.bash` | the words, their effect, and the one function that composes them |
 | the record | `bashcap/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
 | the rendering | `bashcap/show.rs` | reading a written capture back, and the one `Display` of one |
 | the tool | `bashcap/mod.rs` | a rig whose session is a sink, and the JSON line format it owns |
@@ -42,12 +42,12 @@ context rides along without being named at each site. `WITH_BASHCAP` is the
 CPS form: it snapshots, runs the continuation, and returns *its* status.
 
 Keeping those call sites runnable without the tool is the client's own, and
-`assets/bashcap_polyfill.bash` is what it vendors to do it — see
+`assets/bashcap.bash` is what it vendors to do it — see
 [vendoring.md](vendoring.md).
 
 ## The instrument
 
-`bashcap.bash`, whose snapshot ends:
+`effect.bash`, whose snapshot ends:
 
 ```bash
     local -a __bc_walk=()
@@ -94,7 +94,7 @@ its first element.
 /// Whether the subject's shells record what each call was passed.
 pub enum Tracing { Off, Calls }
 
-/// The bash to put in a `Startup`, for any rig that wants what bashcap
+/// The bash a rig hands the subject, for any rig that wants what bashcap
 /// harvests. One way to compose it; `BASH` and `TRACE` are not public.
 pub fn instrument(tracing: Tracing) -> String;
 
@@ -169,7 +169,7 @@ or a `bashdb` session — gets them without the flag.
 
 ### The stack math
 
-`bashcap.bash` does none. It calls `__bc_stack`, which ships bash's five arrays
+`effect.bash` does none. It calls `__bc_stack`, which ships bash's five arrays
 as they are, and every index — which frames are the instrument's, which line a
 frame is executing, where a call's arguments sit in the flat stack and which
 way round they are — is undone in Rust. [stack.md](stack.md) is the whole of
@@ -199,7 +199,7 @@ pub struct Capturing { pub written: usize, sink: BufWriter<File> } // the sessio
 impl Rig for BashCap {
     type Session = Capturing;
 
-    fn startup(&self) -> Startup { Startup { bash: BASH.into(), ..Default::default() } }
+    fn bash(&self) -> String { instrument(Tracing::Off) }
     fn open(&self) -> Result<Capturing, Failure> { /* creates the file */ }
     fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> { /* writes */ }
     fn end(&self, session: &mut Capturing, _: ExitStatus) -> Result<(), Failure> {
@@ -214,7 +214,7 @@ nothing; the session holds the sink and the tally, and `run` hands it back
 alongside the status:
 
 ```rust
-let (capturing, status) = run(&BashCap::writing(into), argv)?;
+let (capturing, status) = BashCap::writing(into).run(argv)?;
 ```
 
 The wrapped command carries its own program, so `bashcap run --into out bash
@@ -276,7 +276,7 @@ that calls `run`. Four properties of a transparent wrapper:
 make bashcap-demo [SCRIPT=path/to/your.bash]
 ```
 
-Builds the debug binary, shows the vendored polyfill and checks it against the
+Builds the debug binary, shows the vendored words and checks them against the
 asset, runs `__fixtures/bashcap_demo/demo.bash` once with no tool and once
 under `bashcap run`, and renders the capture with `bashcap show`. The fixture
 exercises every facility in one file — typed variables, ambient context,

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 
-use mb_resolver::bash::rig::{run, Doing, ExitStatus, Failure};
+use mb_resolver::bash::rig::{Doing, ExitStatus, Failure, Master};
 use mb_resolver::bashcap::{captures, BashCap};
 
 #[derive(Parser)]
@@ -103,7 +103,7 @@ fn capture(
         bashcap = bashcap.tracing_calls();
     }
 
-    let ran = run(&bashcap, argv)?;
+    let ran = bashcap.run(argv)?;
 
     if verbose {
         eprintln!("bashcap: {} snapshots -> {}", ran.session.written, into.display());

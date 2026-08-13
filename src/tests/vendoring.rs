@@ -1,13 +1,14 @@
-//! What a client ships: the stub that stands in for the words, and the
-//! contract the instrument keeps towards a shell it reaches.
+//! What a client ships: the words, the guard that decides whether they do
+//! anything, and the contract the instrument keeps towards a shell it reaches.
 
+use crate::bash;
 use crate::bash::stack;
-use crate::bashcap::instrument::{BASH, TRACE};
+use crate::bashcap::instrument::{EFFECT, TRACE, WORDS};
 
-use super::{script, POLYFILL};
+use super::script;
 
 #[test]
-fn the_vendored_stub_carries_a_call_site_without_the_tool() {
+fn the_vendored_words_carry_a_call_site_without_the_tool() {
     let temp = tempfile::tempdir().unwrap();
     let entry = script(
         temp.path(),
@@ -25,11 +26,24 @@ fn the_vendored_stub_carries_a_call_site_without_the_tool() {
     assert_eq!(ran.status.code(), Some(7), "the continuation's own status");
 }
 
+/// The words are one file, shipped both ways, so a client's copy cannot drift
+/// from the injected one. What makes that possible is that they name nothing
+/// that only exists once the tool has been sourced.
+#[test]
+fn the_words_name_nothing_a_client_would_not_have() {
+    for line in WORDS.lines().filter(|line| !line.trim_start().starts_with('#')) {
+        for name in bash::INJECTED_NAMES {
+            assert!(!line.contains(name), "{name} in a file a client vendors: {line}");
+        }
+    }
+}
+
 #[test]
 fn no_shipped_bash_exports_a_name() {
     let walk = stack::with(&[]);
-    let shipped = [("stack.bash", walk.as_str()), ("bashcap.bash", BASH),
-        ("trace.bash", TRACE), ("bashcap_polyfill.bash", POLYFILL)];
+    let shipped =
+        [("stack.bash", walk.as_str()), ("bashcap.bash", WORDS), ("effect.bash", EFFECT),
+         ("trace.bash", TRACE)];
 
     for (whose, bash) in shipped {
         for line in bash.lines().filter(|line| !line.trim_start().starts_with('#')) {

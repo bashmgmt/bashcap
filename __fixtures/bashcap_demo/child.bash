@@ -5,8 +5,8 @@
 # wants them turns it on itself, as its own first statement.
 shopt -s extdebug
 
-source "$(dirname "${BASH_SOURCE[0]}")/polyfill.bash"
-declare -F BASHCAP >/dev/null || __define_bashcap_polyfill
+source "$(dirname "${BASH_SOURCE[0]}")/bashcap.bash"
+declare -F __bc_capture >/dev/null || __bc_capture() { :; }
 
 child_work() {
     declare -a payload=(x y z)

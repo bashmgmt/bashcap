@@ -2,8 +2,8 @@
 # Everything bashcap captures, in one script. No test asserts these line
 # numbers — edit freely.
 
-source "$(dirname "${BASH_SOURCE[0]}")/polyfill.bash"
-declare -F BASHCAP >/dev/null || __define_bashcap_polyfill
+source "$(dirname "${BASH_SOURCE[0]}")/bashcap.bash"
+declare -F __bc_capture >/dev/null || __bc_capture() { :; }
 
 declare -- greeting="hello world"
 declare -a items=(alpha "beta gamma")

@@ -1,6 +1,6 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
-use crate::bash::rig::{run, ExitStatus};
+use crate::bash::rig::{ExitStatus, Master};
 use crate::bashcap::{captures, BashCap};
 
 use super::script;
@@ -18,7 +18,7 @@ fn each_snapshot_is_written_as_it_arrives() {
     );
 
     let (capturing, status) =
-        run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()])
+        BashCap::writing(&into).run(&["bash".into(), entry.into_os_string()])
             .unwrap()
             .whole()
             .unwrap();
@@ -55,7 +55,7 @@ fn a_written_capture_reads_back_whole() {
         "#,
     );
 
-    run(&BashCap::writing(&into), &["bash".into(), entry.into_os_string()])
+    BashCap::writing(&into).run(&["bash".into(), entry.into_os_string()])
         .unwrap()
         .whole()
         .unwrap();

@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::bash::rig::{Doing, ExitStatus, Failure, Line, Rig, Startup};
+use crate::bash::rig::{Doing, Failure, Halt, Line, Master, Rig, Slave};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
@@ -56,8 +56,8 @@ impl Rig for BashCap {
     /// bashcap's instrument reaches every shell through the prelude, which
     /// is why tracing lives here and not in the command line: `BASH_ENV`
     /// reaches a subject's children, its argv does not.
-    fn startup(&self) -> Startup {
-        Startup { bash: instrument(self.tracing), ..Default::default() }
+    fn bash(&self) -> String {
+        instrument(self.tracing)
     }
 
     fn open(&self) -> Result<Capturing, Failure> {
@@ -68,7 +68,7 @@ impl Rig for BashCap {
 
     /// One JSON object per line, in arrival order. Each carries both clocks,
     /// so ordering downstream is exact and is `sort`'s job.
-    fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> {
+    fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Halt> {
         let Some(decoded) = Capture::of(&said) else { return Ok(()) };
         let at = || format!("a snapshot from pid {}", said.sent.pid);
 
@@ -80,7 +80,16 @@ impl Rig for BashCap {
     }
 
     /// A failed flush ends the run rather than being lost in a `Drop`.
-    fn end(&self, session: &mut Capturing, _status: ExitStatus) -> Result<(), Failure> {
+    fn end(&self, session: &mut Capturing) -> Result<(), Failure> {
         session.sink.flush().doing(|| self.writing_to())
     }
 }
+
+/// Either orchestration: the instrument is the same text, and what it harvests
+/// is the same either way.
+///
+/// [`Tracing::Calls`] is the exception in degree: reached as a `Master` it arms
+/// itself before the subject's first line, reached as a `Slave` it installs a
+/// `DEBUG` trap in a shell that is already running.
+impl Master for BashCap {}
+impl Slave for BashCap {}
