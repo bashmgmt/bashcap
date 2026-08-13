@@ -17,7 +17,7 @@ pub enum Tracing {
     Off,
 
     /// Every frame comes back with the arguments its call was made with —
-    /// see [`Frame::args`](super::Frame::args).
+    /// see [`Frame::args`](crate::bash::stack::Frame::args).
     Calls,
 }
 
