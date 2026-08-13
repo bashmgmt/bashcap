@@ -109,12 +109,11 @@ fn reading(key: &str, cause: impl Into<Box<dyn std::error::Error + Send + Sync>>
     Failure::new(format!("reading the {key:?} section"), cause)
 }
 
-fn section<'a>(sections: &'a [String], key: &str) -> Result<&'a str, Failure> {
-    field(sections, key).ok_or_else(|| reading(key, "it is missing"))
-}
-
+/// One section, as the array literal it is written as.
 fn flat(sections: &[String], key: &str) -> Result<Vec<String>, Failure> {
-    parse_array(section(sections, key)?).map_err(|cause| reading(key, cause))
+    let text = field(sections, key).ok_or_else(|| reading(key, "it is missing"))?;
+
+    parse_array(text).map_err(|cause| reading(key, cause))
 }
 
 /// What `${ref[*]@A}` yields: `declare -aX name=rhs`, in its three parts.
