@@ -14,7 +14,9 @@ mod tracing;
 mod vendoring;
 mod writing;
 
-use crate::bash::rig::{Doing, Failure, Line, Master, Rig, Shells};
+use std::sync::Arc;
+
+use crate::bash::rig::{Doing, Failure, Laid, Line, Master, Reacting, Rig, Shell};
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
 use crate::tests::scripts::{bash, Scripts};
@@ -44,40 +46,47 @@ pub(super) const ENTRY: &str = "main.bash";
 /// rather than JSON. Every snapshot must decode.
 struct Decoding;
 
-#[derive(Default)]
 struct Decoded {
-    shells: Shells,
+    shell: Arc<Shell>,
     seen: Vec<Capture>,
 }
 
 impl Rig for Decoding {
-    type Session = Decoded;
+    type Attending = Decoded;
 
     fn bash(&self) -> String {
         instrument(Tracing::Off)
     }
 
-    fn open(&self) -> Result<Self::Session, Failure> {
-        Ok(Decoded::default())
+    fn joined(&self, _at: &Laid, shell: Arc<Shell>) -> Result<Decoded, Failure> {
+        Ok(Decoded { shell, seen: Vec::new() })
     }
+}
 
-    fn hear(&self, decoded: &mut Self::Session, said: Line) -> Result<(), Failure> {
-        let shell = decoded.shells.hear(&said)?;
+impl Reacting for Decoded {
+    type Kept = Vec<Capture>;
 
-        let Some(capture) = Capture::of(&said, &decoded.shells.at(shell).bash) else {
+    fn hear(&mut self, said: Line) -> Result<(), Failure> {
+        let Some(capture) = Capture::of(&said, &self.shell) else {
             return Ok(());
         };
 
-        decoded.seen.push(capture.doing(|| format!("a snapshot from pid {}", said.sent.pid))?);
+        self.seen.push(capture.doing(|| format!("a snapshot from pid {}", self.shell.pid))?);
 
         Ok(())
+    }
+
+    fn finish(self) -> Result<Vec<Capture>, Failure> {
+        Ok(self.seen)
     }
 }
 
 impl Master for Decoding {}
 
+/// Every snapshot a script produced, shell by shell in the order they joined.
 fn capture(body: &str) -> Vec<Capture> {
     let scripts = script(body);
+    let ran = Decoding.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
 
-    Decoding.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap().0.seen
+    ran.shells.into_iter().flat_map(|at| at.kept).collect()
 }

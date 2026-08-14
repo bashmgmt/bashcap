@@ -5,11 +5,14 @@ mod instrument;
 mod show;
 mod snapshot;
 
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
 
-use crate::bash::rig::{Doing, Failure, Line, Master, Rig, Shells, Slave};
+use crate::bash::rig::{Doing, Failure, Laid, Line, Master, Reacting, Rig, Shell, Slave};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
@@ -18,46 +21,40 @@ pub use snapshot::{Capture, Captured, Snapshot, Value};
 #[cfg(test)]
 mod tests;
 
+/// The one file a run's captures go to. Every shell writes to it, so it is the
+/// rig's and each reaction holds a share.
+type Sink = Rc<RefCell<BufWriter<File>>>;
+
 /// Where the capture goes, and whether to ask the shell to record the
-/// arguments each call was made with. A description: it opens nothing.
+/// arguments each call was made with.
 pub struct BashCap {
     into: PathBuf,
+    sink: Sink,
     tracing: Tracing,
 }
 
-/// bashcap's session: a sink, a tally, and the shells that have joined so far.
-/// Written as each snapshot arrives, so resident memory does not track the run.
-///
-/// The register is the one thing kept: a walk is read against the shell it was
-/// taken in, and a decoder reading a run as it arrives has to know that shell
-/// by the time the walk turns up. It grows by one entry per shell, not per
-/// message.
-pub struct Capturing {
-    pub written: usize,
-    shells: Shells,
-    sink: BufWriter<File>,
-}
-
 impl BashCap {
-    pub fn writing(into: impl Into<PathBuf>) -> Self {
-        Self { into: into.into(), tracing: Tracing::Off }
+    /// Opens the file, truncating it: an unwritable path is a failure of the
+    /// caller's own before any shell has run.
+    pub fn writing(into: impl Into<PathBuf>) -> Result<Self, Failure> {
+        let into = into.into();
+        let file = File::create(&into).doing(|| format!("writing {}", into.display()))?;
+
+        Ok(Self { into, sink: Rc::new(RefCell::new(BufWriter::new(file))), tracing: Tracing::Off })
     }
 
     /// Ask the subject's shells to record what each call was passed. This
     /// changes the subject: `extdebug` makes `ERR`, `DEBUG` and `RETURN`
     /// traps inherited by functions and subshells.
+    #[must_use]
     pub fn tracing_calls(mut self) -> Self {
         self.tracing = Tracing::Calls;
         self
     }
-
-    fn writing_to(&self) -> String {
-        format!("writing {}", self.into.display())
-    }
 }
 
 impl Rig for BashCap {
-    type Session = Capturing;
+    type Attending = Capturing;
 
     /// bashcap's instrument reaches every shell through the prelude, which
     /// is why tracing lives here and not in the command line: `BASH_ENV`
@@ -66,35 +63,56 @@ impl Rig for BashCap {
         instrument(self.tracing)
     }
 
-    fn open(&self) -> Result<Capturing, Failure> {
-        let sink = File::create(&self.into).doing(|| self.writing_to())?;
-
-        Ok(Capturing { written: 0, shells: Shells::default(), sink: BufWriter::new(sink) })
+    fn joined(&self, _at: &Laid, shell: Arc<Shell>) -> Result<Capturing, Failure> {
+        Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }
+}
 
-    /// One JSON object per line, in arrival order. Each carries both clocks,
-    /// so ordering downstream is exact and is `sort`'s job.
-    ///
-    /// Every message goes through the register first, whether or not it is one
-    /// of ours: that is what opens a shell and what places the rest under it.
-    fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> {
-        let at = || format!("a snapshot from pid {}", said.sent.pid);
-        let shell = session.shells.hear(&said)?;
+/// One shell's captures, written as they arrive so resident memory does not
+/// track the run.
+///
+/// The shell is a member: a walk is read against the shell it was taken in, and
+/// this one was handed the shell before its first message could arrive.
+pub struct Capturing {
+    shell: Arc<Shell>,
+    into: PathBuf,
+    sink: Sink,
+    written: usize,
+}
 
-        let Some(decoded) = Capture::of(&said, &session.shells.at(shell).bash) else {
+impl Capturing {
+    fn writing(&self) -> String {
+        format!("writing {}", self.into.display())
+    }
+}
+
+impl Reacting for Capturing {
+    /// How many snapshots this shell wrote. What they said went to the file.
+    type Kept = usize;
+
+    /// One JSON object per line, in arrival order. Each carries both clocks, so
+    /// ordering downstream is exact and is `sort`'s job.
+    fn hear(&mut self, said: Line) -> Result<(), Failure> {
+        let at = || format!("a snapshot from pid {}", self.shell.pid);
+
+        let Some(decoded) = Capture::of(&said, &self.shell) else {
             return Ok(());
         };
-
         let json = serde_json::to_string(&decoded.doing(at)?).doing(at)?;
-        writeln!(session.sink, "{json}").doing(|| self.writing_to())?;
-        session.written += 1;
+
+        writeln!(self.sink.borrow_mut(), "{json}").doing(|| self.writing())?;
+        self.written += 1;
 
         Ok(())
     }
 
-    /// A failed flush ends the run rather than being lost in a `Drop`.
-    fn end(&self, session: &mut Capturing) -> Result<(), Failure> {
-        session.sink.flush().doing(|| self.writing_to())
+    /// A failed flush ends the run rather than being lost in a `Drop`. The sink
+    /// outlives every reaction, so the last shell to finish is what puts the
+    /// run's tail on disk.
+    fn finish(self) -> Result<usize, Failure> {
+        self.sink.borrow_mut().flush().doing(|| self.writing())?;
+
+        Ok(self.written)
     }
 }
 

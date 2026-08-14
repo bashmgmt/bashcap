@@ -68,7 +68,7 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     };
 
     let plain = scripts.at("plain.jsonl");
-    let bare = ran(BashCap::writing(&plain), &plain);
+    let bare = ran(BashCap::writing(&plain).unwrap(), &plain);
     assert_eq!(bare.len(), 2, "one snapshot from each shell");
     assert!(
         bare.iter().flat_map(|seen| seen.snapshot.stack.frames()).all(|frame| frame.args.is_none()),
@@ -76,7 +76,7 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     );
 
     let full = scripts.at("traced.jsonl");
-    let traced = ran(BashCap::writing(&full).tracing_calls(), &full);
+    let traced = ran(BashCap::writing(&full).unwrap().tracing_calls(), &full);
     let called: Vec<Vec<&[String]>> = traced
         .iter()
         .map(|seen| {
@@ -96,5 +96,5 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
         ],
         "the switch reached the child process too"
     );
-    assert_ne!(traced[0].sent.pid, traced[1].sent.pid, "two shells, not one");
+    assert_ne!(traced[0].shell.pid, traced[1].shell.pid, "two shells, not one");
 }

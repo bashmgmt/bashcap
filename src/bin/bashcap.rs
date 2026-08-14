@@ -81,7 +81,7 @@ fn show(from: &Path) -> Result<(), Failure> {
     let reading = || format!("reading {}", from.display());
     let seen = captures(&std::fs::read_to_string(from).doing(reading)?).doing(reading)?;
 
-    let shells: HashSet<u32> = seen.iter().map(|capture| capture.sent.pid.0).collect();
+    let shells: HashSet<usize> = seen.iter().map(|capture| capture.shell.nth).collect();
     println!("{} snapshots from {} shells\n", seen.len(), shells.len());
 
     for (at, capture) in seen.iter().enumerate() {
@@ -98,7 +98,7 @@ fn capture(
     verbose: bool,
     trace_calls: bool,
 ) -> Result<ExitStatus, Failure> {
-    let mut bashcap = BashCap::writing(into);
+    let mut bashcap = BashCap::writing(into)?;
     if trace_calls {
         bashcap = bashcap.tracing_calls();
     }
@@ -106,7 +106,9 @@ fn capture(
     let ran = bashcap.run(argv)?;
 
     if verbose {
-        eprintln!("bashcap: {} snapshots -> {}", ran.session.written, into.display());
+        let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
+
+        eprintln!("bashcap: {written} snapshots -> {}", into.display());
     }
 
     // The subject's own status either way: it was seen out to the end.

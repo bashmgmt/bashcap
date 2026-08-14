@@ -50,13 +50,13 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert_eq!(deep.rematch, ["build-2026", "build", "2026"]);
     assert_eq!(deep.notes, ["deep"]);
 
-    // Three homes and no overlap: what only this moment can say, what every
-    // message carries already, and what the shell said once when it joined.
+    // Two homes and no overlap: what only this moment can say, and what the
+    // shell said once when it joined.
     assert!(deep.state.contains_key("seconds"));
-    assert!(snaps[0].sent.shlvl > 0);
-    assert!(snaps[0].shell.version.at_least(5, 0, 0), "$EPOCHREALTIME is bash 5");
-    assert!(snaps[0].shell.started.from_a_file(), "a script bash was handed to read");
-    assert!(!snaps[0].shell.started.interactive);
+    assert!(snaps[0].shell.shlvl > 0);
+    assert!(snaps[0].shell.bash.version.at_least(5, 0, 0), "$EPOCHREALTIME is bash 5");
+    assert!(snaps[0].shell.bash.started.from_a_file(), "a script bash was handed to read");
+    assert!(!snaps[0].shell.bash.started.interactive);
 
     let wrapped = &snaps[1].snapshot;
     assert_eq!(wrapped.stack.at().site.to_string(), "WITH_BASHCAP");

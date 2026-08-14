@@ -39,15 +39,10 @@ impl fmt::Display for Captured {
 
 impl fmt::Display for Capture {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let state = |key| self.snapshot.state.get(key).map_or("?", String::as_str);
-
         writeln!(
             f,
             "pid {} seq {} shlvl {} subshell {}",
-            self.sent.pid,
-            self.sent.seq,
-            state("shlvl"),
-            state("subshell")
+            self.shell.pid, self.sent.seq, self.shell.shlvl, self.shell.subshell
         )?;
 
         for frame in self.snapshot.stack.frames() {

@@ -15,8 +15,7 @@ __bc_capture() {
 
     # What changes while a shell runs and nothing else says. The rest of what a
     # shell is — which bash, how it was started, which options it had on, how
-    # deep a subshell it is — it said once when it joined, and `$SHLVL` rides on
-    # every message already.
+    # deep a subshell it is — it said once when it joined.
     local -a __bc_state=(
         seconds "$SECONDS"
     )

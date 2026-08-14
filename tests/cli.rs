@@ -220,8 +220,8 @@ fn a_message_that_will_not_read_refuses_a_profile_and_not_a_record() {
 }
 
 /// Before any of it is read as calls: one JSON object per line, each the
-/// arglist one shell sent with the provenance the protocol put in front. The
-/// END that never came is the whole difference from the recorded tree.
+/// arglist one shell sent beside the shell that sent it. The END that never
+/// came is the whole difference from the recorded tree.
 #[test]
 fn the_raw_reading_is_one_message_per_line() {
     let ran = bashprof(&dying(), &["--output=raw"]);
@@ -232,18 +232,23 @@ fn the_raw_reading_is_one_message_per_line() {
         .map(|line| serde_json::from_str(line).expect("one message per line"))
         .collect();
 
-    // The shell opens with its own account of itself, then the instrument's
-    // messages. Both are on the wire, and this output is the wire.
-    let kinds: Vec<&str> = heard.iter().map(|line| line["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds, ["JOIN", "SAY", "SAY", "SAY"], "{}", ran.into);
+    // A shell's account of itself is not among these: it is what makes the
+    // shell, and what every line then carries whole.
+    let kinds: Vec<&str> =
+        heard.iter().map(|said| said["line"]["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["SAY", "SAY", "SAY"], "{}", ran.into);
+    assert!(
+        heard.iter().all(|said| said["shell"]["pid"].is_u64()),
+        "and says which shell: {}",
+        ran.into
+    );
 
-    let instrument = &heard[1..];
     let said: Vec<&str> =
-        instrument.iter().map(|line| line["words"][1].as_str().unwrap()).collect();
+        heard.iter().map(|said| said["line"]["words"][1].as_str().unwrap()).collect();
 
     assert_eq!(said, ["BEGIN", "END", "BEGIN"], "{}", ran.into);
     assert!(
-        instrument.iter().all(|line| line["words"][0] == "TIME_CPS"),
+        heard.iter().all(|said| said["line"]["words"][0] == "TIME_CPS"),
         "{}",
         ran.into
     );

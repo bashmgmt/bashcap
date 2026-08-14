@@ -16,10 +16,11 @@ fn each_snapshot_is_written_as_it_arrives() {
     );
     let into = scripts.at("out.jsonl");
 
-    let (capturing, status) =
-        BashCap::writing(&into).run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
-    assert_eq!(capturing.written, 2);
-    assert_eq!(status, ExitStatus::Code(0));
+    let ran =
+        BashCap::writing(&into).unwrap().run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
+
+    assert_eq!(ran.shells.iter().map(|at| at.kept).sum::<usize>(), 2);
+    assert_eq!(ran.subject, ExitStatus::Code(0));
 
     let rows: Vec<serde_json::Value> = std::fs::read_to_string(&into)
         .unwrap()
@@ -29,7 +30,7 @@ fn each_snapshot_is_written_as_it_arrives() {
 
     assert_eq!(rows.len(), 2);
     for row in &rows {
-        assert!(row["sent"]["pid"].is_u64(), "provenance is its own object: {row}");
+        assert!(row["shell"]["pid"].is_u64(), "the shell that took it, whole: {row}");
         for key in ["stack", "state"] {
             assert!(row["snapshot"].get(key).is_some(), "{key} missing from {row}");
         }
@@ -49,7 +50,7 @@ fn a_written_capture_reads_back_whole() {
     );
     let into = scripts.at("out.jsonl");
 
-    BashCap::writing(&into).run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
+    BashCap::writing(&into).unwrap().run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
 
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 
