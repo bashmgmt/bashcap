@@ -9,7 +9,7 @@ one subject per file:
 | the instrument | `bashcap/instrument.rs`, `assets/bashcap.bash`, `bashcap/effect.bash`, `trace.bash` | the words, their effect, and the one function that composes them |
 | the record | `bashcap/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
 | the rendering | `bashcap/show.rs` | reading a written capture back, and the one `Display` of one |
-| the tool | `bashcap/mod.rs` | a rig whose session is a sink, and the JSON line format it owns |
+| the tool | `bashcap/mod.rs` | a rig whose reactions share one sink, and the JSON line format it owns |
 | the program | `src/bin/bashcap.rs` | `clap` and `main` |
 
 `instrument` and `Capture::of` are the pair another tool reuses: the bash that
@@ -69,7 +69,7 @@ reports a stack, and contributes six sections of its own — see
 `state` holds only what changes while a shell runs and nothing else records —
 `$SECONDS`. Which bash it is, how it was started and which options it had on
 were said once when the shell joined ([tree.md](tree.md)); `$SHLVL` rides on
-every message already ([wire.md](wire.md#the-message)). A snapshot repeating any
+every message already ([wire.md](wire.md#messages)). A snapshot repeating any
 of those would be a second source for one fact.
 
 Two details in the bash worth knowing:
@@ -199,35 +199,51 @@ contributed, `flat` reads the rest with `parse_array`, and
 attribute letters, and its value.
 
 Note what the snapshot does **not** carry: a timestamp, a pid, or a parent.
-Those are provenance: the protocol puts them in front of every message and
-every tool gets them on `Line` without asking. See [tree.md](tree.md).
+The clocks are on the message, and everything about the shell is on the shell —
+which a reaction was handed at construction. See [tree.md](tree.md).
 
 ## The tool
 
 ```rust
-pub struct BashCap   { into: PathBuf }                             // description
-pub struct Capturing { pub written: usize, sink: BufWriter<File> } // the session
+type Sink = Rc<RefCell<BufWriter<File>>>;
+
+pub struct BashCap   { into: PathBuf, sink: Sink, tracing: Tracing }
+pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: usize }
 
 impl Rig for BashCap {
-    type Session = Capturing;
+    type Attending = Capturing;
 
-    fn bash(&self) -> String { instrument(Tracing::Off) }
-    fn open(&self) -> Result<Capturing, Failure> { /* creates the file */ }
-    fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> { /* writes */ }
-    fn end(&self, session: &mut Capturing, _: ExitStatus) -> Result<(), Failure> {
-        session.sink.flush().doing(|| self.writing_to())
+    fn bash(&self) -> String { instrument(self.tracing) }
+
+    fn joined(&self, _at: &Laid, shell: Arc<Shell>) -> Result<Capturing, Failure> {
+        Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }
+}
+
+impl Reacting for Capturing {
+    type Kept = usize;   // how many this shell wrote; what they said is in the file
+
+    fn hear(&mut self, said: Line) -> Result<(), Failure> { /* decodes and writes */ }
+    fn finish(self) -> Result<usize, Failure> { /* flushes */ }
 }
 ```
 
 `answer` is inherited: bashcap only listens, so a shell that asks it something
-is told the word is unknown. `BashCap { into }` is a description and opens
-nothing; the session holds the sink and the tally, and `run` hands it back
-alongside the status:
+is told the word is unknown.
+
+**One file, one reaction per shell.** `BashCap::writing` opens the file, so a
+path that cannot be written is a failure before any shell has run, and each
+reaction holds a share of it. The shell is a member: a walk is read against the
+shell it was taken in, and this one had it before its first message could
+arrive.
 
 ```rust
-let (capturing, status) = BashCap::writing(into).run(argv)?;
+let ran = BashCap::writing(into)?.run(argv)?.whole()?;
+let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
 ```
+
+The tally is a sum over the shells rather than a counter beside them — one
+source for one fact.
 
 The wrapped command carries its own program, so `bashcap run --into out bash
 build.bash` is the ordinary form and `bashcap run --into out make test` also
