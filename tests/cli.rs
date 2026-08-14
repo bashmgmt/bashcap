@@ -179,6 +179,46 @@ fn the_recorded_reading_keeps_the_call_that_never_ended() {
     assert!(tree[1]["record"]["unended"].get("ended_at").is_none(), "no END, so no end");
 }
 
+/// A run holding a message the instrument wrote and cannot read back, beside
+/// two calls it can. Only a shell saying it directly can stage this: the word
+/// a client writes cannot produce one.
+fn mangled() -> Scripts {
+    Scripts::of(&[(
+        "build.bash",
+        r#"BASHPROF_TIME_CPS before true
+        BC_INSTR say TIME_CPS BEGIN id 1.99 inside "" label mangled
+        BASHPROF_TIME_CPS after true
+        "#,
+    )])
+}
+
+/// The two readings answer that differently. Measurements refuse, every entry
+/// of them claiming a duration. What the run recorded is written anyway, with
+/// a word on stderr, because it is what the run said.
+#[test]
+fn a_message_that_will_not_read_refuses_a_profile_and_not_a_record() {
+    let complaint = r#"a BEGIN with no "argv""#;
+
+    let refused = bashprof(&mangled(), &[]);
+    assert_eq!(refused.status, Some(1), "bashprof's own code: the subject was fine");
+    assert_eq!(refused.into, "", "no tree claiming time it cannot account for");
+    assert!(refused.stderr.contains(complaint), "{}", refused.stderr);
+
+    let kept = bashprof(&mangled(), &["--output=tree-with-err"]);
+    assert_eq!(kept.status, Some(0), "the subject's own code");
+    assert!(kept.stderr.contains(complaint), "{}", kept.stderr);
+
+    let tree: serde_json::Value = serde_json::from_str(&kept.into).expect("a JSON tree");
+    let labels: Vec<&str> = tree
+        .as_array()
+        .expect("an array of roots")
+        .iter()
+        .map(|node| node["record"]["ended"]["call"]["label"].as_str().expect("a label"))
+        .collect();
+
+    assert_eq!(labels, ["before", "after"], "the calls around it are no less true: {tree:#}");
+}
+
 /// Before any of it is read as calls: one JSON object per line, each the
 /// arglist one shell sent with the provenance the protocol put in front. The
 /// END that never came is the whole difference from the recorded tree.
