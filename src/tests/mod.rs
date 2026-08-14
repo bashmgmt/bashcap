@@ -19,10 +19,16 @@ use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
 use crate::tests::scripts::{bash, Scripts};
 
-/// What a shipped script writes: the words beside it, and one line naming the
-/// hook rather than the words — so a client cannot displace the real ones
-/// whichever order the two arrive in.
-const VENDORING: &str = "source \"$(dirname \"${BASH_SOURCE[0]}\")/bashcap.bash\"\n\
+/// What a shipped script writes: strict options, the words beside it, and one
+/// line naming the hook rather than the words — so a client cannot displace the
+/// real ones whichever order the two arrive in.
+///
+/// `set -u` is the option that reaches furthest into the tool, every name the
+/// instrument reads having to be one it set. It leads because a client that
+/// joins a session of its own has it on before anything of the tool's is
+/// sourced at all.
+const VENDORING: &str = "set -euo pipefail\n\
+                         source \"$(dirname \"${BASH_SOURCE[0]}\")/bashcap.bash\"\n\
                          declare -F __bc_capture >/dev/null || __bc_capture() { :; }\n";
 
 /// A script vendoring the words as a shipped one would. What it sources is the
