@@ -29,8 +29,8 @@ hr "the same fixture without the tool — the guard installs an empty hook"
 bash "$FIXTURE" >/dev/null
 printf '   exited %s\n' "$?"
 
-hr "run"
-"$BIN" run --into "$WORK/capture.jsonl" -- bash "$FIXTURE"
+hr "run_bash_env"
+"$BIN" run_bash_env --into "$WORK/capture.jsonl" -- bash "$FIXTURE"
 printf '   the wrapped script exited %s\n' "$?"
 
 hr "captured snapshots"

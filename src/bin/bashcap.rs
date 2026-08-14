@@ -1,12 +1,18 @@
-//! A transparent bash wrapper: run a script and write the full state of
-//! every shell at every `BASHCAP` call site.
+//! A transparent bash wrapper: write the full state of every shell at every
+//! `BASHCAP` call site.
+//!
+//! Two ways in, and they differ only in who started the shells. `run_bash_env`
+//! starts a command line and reaches its whole process tree through
+//! `BASH_ENV`; `serve` is started *by* a bash script and hands that script the
+//! address to join. What is captured, and where it goes, is the same either
+//! way — which is why both take the same options, from the same type.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
-use mb_resolver::bash::rig::{Doing, ExitStatus, Failure, Master};
+use mb_resolver::bash::rig::{Attended, Doing, ExitStatus, Failure, Master, Slave};
 use mb_resolver::bashcap::{captures, BashCap};
 
 #[derive(Parser)]
@@ -18,21 +24,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum What {
-    /// Run a bash command under capture.
-    Run {
-        /// Where the capture goes: one JSON snapshot per line.
-        #[arg(long)]
-        into: PathBuf,
-
-        /// Tally what was written, on stderr.
-        #[arg(long)]
-        verbose: bool,
-
-        /// Record what each call was passed. This asks the subject's shells
-        /// for `extdebug`, which also makes ERR, DEBUG and RETURN traps
-        /// inherited by functions and subshells.
-        #[arg(long)]
-        trace_calls: bool,
+    /// Run a command line under capture, reaching every shell it starts
+    /// through BASH_ENV.
+    #[command(name = "run_bash_env")]
+    RunBashEnv {
+        #[command(flatten)]
+        capture: Capture,
 
         /// The wrapped command, program included — `bash build.bash`, or
         /// `make test`, whose own shells join too. Everything from the first
@@ -42,16 +39,92 @@ enum What {
         argv: Vec<String>,
     },
 
-    /// Render a capture written by `run`.
+    /// Capture for a bash script that started this process as a coprocess: it
+    /// holds this process's standard input, and reads the address to join from
+    /// its standard output.
+    Serve {
+        #[command(flatten)]
+        capture: Capture,
+    },
+
+    /// Render a capture written by either of them.
     Show {
         /// The file to read: one JSON snapshot per line.
         from: PathBuf,
     },
 }
 
+/// What to capture and where to put it — the same question in both roles.
+#[derive(Args)]
+struct Capture {
+    /// Where the capture goes: one JSON snapshot per line.
+    #[arg(long)]
+    into: PathBuf,
+
+    /// Tally what was written, on stderr. Never on stdout: under `serve` that
+    /// is the channel the address goes out on.
+    #[arg(long)]
+    verbose: bool,
+
+    /// Record what each call was passed. This asks the subject's shells for
+    /// `extdebug`, which also makes ERR, DEBUG and RETURN traps inherited by
+    /// functions and subshells. Under `serve` it installs a DEBUG trap in a
+    /// shell that is already running, replacing one the client had.
+    #[arg(long)]
+    trace_calls: bool,
+}
+
+impl Capture {
+    /// The tool this asks for. The file is opened here, so a path that cannot
+    /// be written is known before any shell has run.
+    fn tool(&self) -> Result<BashCap, Failure> {
+        let bashcap = BashCap::writing(&self.into)?;
+
+        Ok(match self.trace_calls {
+            true => bashcap.tracing_calls(),
+            false => bashcap,
+        })
+    }
+
+    /// How many snapshots the run wrote, summed over the shells that wrote
+    /// them.
+    fn tally(&self, shells: &[Attended<usize>]) {
+        if self.verbose {
+            let written: usize = shells.iter().map(|shell| shell.kept).sum();
+
+            eprintln!("bashcap: {written} snapshots -> {}", self.into.display());
+        }
+    }
+
+    /// The exit code is the subject's, so a wrapped script is indistinguishable
+    /// from an unwrapped one.
+    fn run(&self, argv: &[String]) -> Result<ExitStatus, Failure> {
+        let ran = self.tool()?.run(argv)?;
+
+        self.tally(&ran.shells);
+
+        // The subject's own status either way: it was seen out to the end.
+        if let Some(why) = ran.failed {
+            eprintln!("bashcap: {why}");
+        }
+
+        Ok(ran.subject)
+    }
+
+    /// Nothing here starts a shell or ends one, so there is no subject's status
+    /// to hand back — only whether the capture itself came out whole.
+    fn serve(&self) -> Result<(), Failure> {
+        let served = self.tool()?.serve_coprocess()?;
+
+        self.tally(&served.shells);
+
+        served.failed.map_or(Ok(()), Err)
+    }
+}
+
 fn main() {
     let code = match Cli::try_parse() {
-        Ok(cli) => perform(cli.what).unwrap_or_else(|error| {
+        Ok(cli) => perform(&cli.what).unwrap_or_else(|error| {
             eprintln!("bashcap: {error}");
             1
         }),
@@ -66,14 +139,13 @@ fn main() {
     std::process::exit(code);
 }
 
-/// The exit code the subcommand earned. Only `run` has one of its own — it is
-/// the subject's — and everything that fails does so the same way.
-fn perform(what: What) -> Result<i32, Failure> {
+/// The exit code the subcommand earned. Only `run_bash_env` has one of its own
+/// — it is the subject's — and everything that fails does so the same way.
+fn perform(what: &What) -> Result<i32, Failure> {
     match what {
-        What::Run { into, verbose, trace_calls, argv } => {
-            capture(&argv, &into, verbose, trace_calls).map(ExitStatus::shell_code)
-        }
-        What::Show { from } => show(&from).map(|()| 0),
+        What::RunBashEnv { capture, argv } => capture.run(argv).map(ExitStatus::shell_code),
+        What::Serve { capture } => capture.serve().map(|()| 0),
+        What::Show { from } => show(from).map(|()| 0),
     }
 }
 
@@ -90,33 +162,4 @@ fn show(from: &Path) -> Result<(), Failure> {
         println!("[{at}] {capture}");
     }
     Ok(())
-}
-
-/// The exit code is the subject's, so a wrapped script is indistinguishable
-/// from an unwrapped one.
-fn capture(
-    argv: &[String],
-    into: &Path,
-    verbose: bool,
-    trace_calls: bool,
-) -> Result<ExitStatus, Failure> {
-    let mut bashcap = BashCap::writing(into)?;
-    if trace_calls {
-        bashcap = bashcap.tracing_calls();
-    }
-
-    let ran = bashcap.run(argv)?;
-
-    if verbose {
-        let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
-
-        eprintln!("bashcap: {written} snapshots -> {}", into.display());
-    }
-
-    // The subject's own status either way: it was seen out to the end.
-    if let Some(why) = ran.failed {
-        eprintln!("bashcap: {why}");
-    }
-
-    Ok(ran.subject)
 }

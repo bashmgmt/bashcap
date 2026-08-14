@@ -36,7 +36,7 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
     let into = scripts.at("capture.jsonl");
 
     let ran = Command::new(BASHCAP)
-        .args(["run", "--into"])
+        .args(["run_bash_env", "--into"])
         .arg(&into)
         .args(["--trace-calls", "--", "bash"])
         .arg(scripts.at("build.bash"))
@@ -71,7 +71,7 @@ fn without_the_switch_nothing_is_traced() {
     let into = scripts.at("capture.jsonl");
 
     let ran = Command::new(BASHCAP)
-        .args(["run", "--into"])
+        .args(["run_bash_env", "--into"])
         .arg(&into)
         .args(["--", "bash"])
         .arg(scripts.at("build.bash"))
@@ -97,7 +97,7 @@ struct Ran {
 fn bashprof(scripts: &Scripts, output: &[&str]) -> Ran {
     let into = scripts.at("reading.json");
     let ran = Command::new(BASHPROF)
-        .arg("--into")
+        .args(["run_bash_env", "--into"])
         .arg(&into)
         .args(output)
         .args(["--", "bash"])
@@ -252,4 +252,106 @@ fn the_raw_reading_is_one_message_per_line() {
         "{}",
         ran.into
     );
+}
+
+// ── the other role: a bash script starts the tool ────────────────────
+
+/// A file under `__fixtures/`, by path from the crate root.
+fn fixture(relative: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("__fixtures").join(relative)
+}
+
+/// `assets/joining.bash`, where a client would have vendored it. Sourcing it
+/// from where it lives is what keeps the test and the shipped file the same
+/// bytes.
+fn joining() -> String {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets/joining.bash")
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// The vendoring contract end to end, over the shipped binary: the same script
+/// builds on its own with the empty hooks, and measures itself when it is
+/// given a server to start. Nothing about the script changes between the two.
+#[test]
+fn a_script_starts_bashprof_for_itself_and_keeps_the_reading() {
+    let build = fixture("joined/build.bash");
+    let scripts = Scripts::of(&[]);
+    let into = scripts.at("build.times");
+
+    let alone = Command::new("bash").arg(&build).output().expect("bash");
+    assert_eq!(String::from_utf8(alone.stdout).unwrap(), "built\n", "it runs on its own");
+    assert_eq!(alone.status.code(), Some(0));
+
+    let joined = Command::new("bash")
+        .arg(&build)
+        .args([BASHPROF, "serve", "--into"])
+        .arg(&into)
+        .output()
+        .expect("bash");
+
+    assert_eq!(String::from_utf8(joined.stdout).unwrap(), "built\n", "and the same output");
+    assert_eq!(joined.status.code(), Some(0), "{}", String::from_utf8_lossy(&joined.stderr));
+
+    // The script waited for the server it started, so the reading is on disk by
+    // the time it exits. Two spaces of indent per level, label first.
+    let reading = std::fs::read_to_string(&into).expect("the reading the server wrote");
+    let shape: Vec<(usize, &str)> = reading
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let depth = (line.len() - line.trim_start().len()) / 2;
+
+            (depth, line.trim_start().split(' ').next().expect("a label"))
+        })
+        .collect();
+
+    assert_eq!(
+        shape,
+        [(0, "build"), (1, "compile"), (2, "link"), (1, "package")],
+        "the tree the calls made, indented by how deep they nested:\n{reading}"
+    );
+}
+
+/// The same for bashcap, and the same script shape: join, say things, let go.
+/// `BASHCAP` is defined by joining — a client that only ever runs under a
+/// server vendors nothing at all.
+#[test]
+fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
+    let scripts = Scripts::of(&[(
+        "work.bash",
+        &format!(
+            r#"set -euo pipefail
+            source {:?}
+            BC_JOIN "$@"
+
+            step() {{ BASHCAP -BCS:"in a served shell"; }}
+            step 'a target'
+            ( BASHCAP -BCS:"from a subshell" )
+
+            BC_LEAVE
+            "#,
+            joining()
+        ),
+    )]);
+    let into = scripts.at("capture.jsonl");
+
+    let ran = Command::new("bash")
+        .arg(scripts.at("work.bash"))
+        .args([BASHCAP, "serve", "--verbose", "--trace-calls", "--into"])
+        .arg(&into)
+        .output()
+        .expect("bash");
+
+    let complaints = String::from_utf8(ran.stderr).unwrap();
+    assert_eq!(ran.status.code(), Some(0), "{complaints}");
+    assert!(complaints.contains("bashcap: 2 snapshots"), "the tally is on stderr: {complaints}");
+
+    let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
+    let text = String::from_utf8(shown.stdout).unwrap();
+
+    assert!(text.contains("2 snapshots from 2 shells"), "the subshell is one of its own: {text}");
+    assert!(text.contains("step@work.bash:5 ('a target')"), "--trace-calls reached it: {text}");
+    assert!(text.contains("note  from a subshell"), "{text}");
 }
