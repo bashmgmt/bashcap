@@ -66,6 +66,12 @@ reports a stack, and contributes six sections of its own — see
 [stack.md](stack.md). Each section here is an array literal, read back with
 `parse_array`.
 
+`state` holds only what changes while a shell runs and nothing else records —
+`$SECONDS`. Which bash it is, how it was started and which options it had on
+were said once when the shell joined ([tree.md](tree.md)); `$SHLVL` rides on
+every message already ([wire.md](wire.md#the-message)). A snapshot repeating any
+of those would be a second source for one fact.
+
 Two details in the bash worth knowing:
 
 ```bash
@@ -98,9 +104,15 @@ pub enum Tracing { Off, Calls }
 /// harvests. One way to compose it; `BASH` and `TRACE` are not public.
 pub fn instrument(tracing: Tracing) -> String;
 
+pub struct Capture {
+    pub sent: Sent,
+    pub shell: Bash,      // what the shell said of itself when it joined
+    pub snapshot: Snapshot,
+}
+
 pub struct Snapshot {
     pub stack: Stack,
-    pub state: IndexMap<String, String>,
+    pub state: IndexMap<String, String>,   // what only this moment can say
     pub rematch: Vec<String>,
     pub vars: IndexMap<String, Captured>,
     pub notes: Vec<String>,

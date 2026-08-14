@@ -13,13 +13,12 @@ __bc_capture() {
     local -a __bc_walk=()
     __bc_stack __bc_walk "$1"
 
+    # What changes while a shell runs and nothing else says. The rest of what a
+    # shell is — which bash, how it was started, which options it had on, how
+    # deep a subshell it is — it said once when it joined, and `$SHLVL` rides on
+    # every message already.
     local -a __bc_state=(
-        subshell  "$BASH_SUBSHELL"
-        shlvl     "$SHLVL"
-        seconds   "$SECONDS"
-        flags     "$-"
-        bashopts  "$BASHOPTS"
-        shellopts "$SHELLOPTS"
+        seconds "$SECONDS"
     )
 
     local -a __bc_rematch=("${BASH_REMATCH[@]}")

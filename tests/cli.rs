@@ -232,11 +232,18 @@ fn the_raw_reading_is_one_message_per_line() {
         .map(|line| serde_json::from_str(line).expect("one message per line"))
         .collect();
 
-    let said: Vec<&str> = heard.iter().map(|line| line["words"][1].as_str().unwrap()).collect();
+    // The shell opens with its own account of itself, then the instrument's
+    // messages. Both are on the wire, and this output is the wire.
+    let kinds: Vec<&str> = heard.iter().map(|line| line["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["JOIN", "SAY", "SAY", "SAY"], "{}", ran.into);
+
+    let instrument = &heard[1..];
+    let said: Vec<&str> =
+        instrument.iter().map(|line| line["words"][1].as_str().unwrap()).collect();
 
     assert_eq!(said, ["BEGIN", "END", "BEGIN"], "{}", ran.into);
     assert!(
-        heard.iter().all(|line| line["kind"] == "SAY" && line["words"][0] == "TIME_CPS"),
+        instrument.iter().all(|line| line["words"][0] == "TIME_CPS"),
         "{}",
         ran.into
     );

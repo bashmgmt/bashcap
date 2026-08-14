@@ -14,7 +14,7 @@ mod tracing;
 mod vendoring;
 mod writing;
 
-use crate::bash::rig::{Doing, Failure, Line, Master, Rig};
+use crate::bash::rig::{Doing, Failure, Line, Master, Rig, Shells};
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
 use crate::tests::scripts::{bash, Scripts};
@@ -44,21 +44,31 @@ pub(super) const ENTRY: &str = "main.bash";
 /// rather than JSON. Every snapshot must decode.
 struct Decoding;
 
+#[derive(Default)]
+struct Decoded {
+    shells: Shells,
+    seen: Vec<Capture>,
+}
+
 impl Rig for Decoding {
-    type Session = Vec<Capture>;
+    type Session = Decoded;
 
     fn bash(&self) -> String {
         instrument(Tracing::Off)
     }
 
     fn open(&self) -> Result<Self::Session, Failure> {
-        Ok(Vec::new())
+        Ok(Decoded::default())
     }
 
-    fn hear(&self, seen: &mut Self::Session, said: Line) -> Result<(), Failure> {
-        let Some(decoded) = Capture::of(&said) else { return Ok(()) };
+    fn hear(&self, decoded: &mut Self::Session, said: Line) -> Result<(), Failure> {
+        let shell = decoded.shells.hear(&said)?;
 
-        seen.push(decoded.doing(|| format!("a snapshot from pid {}", said.sent.pid))?);
+        let Some(capture) = Capture::of(&said, &decoded.shells.at(shell).bash) else {
+            return Ok(());
+        };
+
+        decoded.seen.push(capture.doing(|| format!("a snapshot from pid {}", said.sent.pid))?);
 
         Ok(())
     }
@@ -69,5 +79,5 @@ impl Master for Decoding {}
 fn capture(body: &str) -> Vec<Capture> {
     let scripts = script(body);
 
-    Decoding.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap().0
+    Decoding.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap().0.seen
 }

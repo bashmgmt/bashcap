@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::bash::rig::{Doing, Failure, Line, Master, Rig, Slave};
+use crate::bash::rig::{Doing, Failure, Line, Master, Rig, Shells, Slave};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
@@ -25,10 +25,16 @@ pub struct BashCap {
     tracing: Tracing,
 }
 
-/// bashcap's session: a sink and a tally. Written as each snapshot arrives,
-/// so resident memory does not track the run.
+/// bashcap's session: a sink, a tally, and the shells that have joined so far.
+/// Written as each snapshot arrives, so resident memory does not track the run.
+///
+/// The register is the one thing kept: a walk is read against the shell it was
+/// taken in, and a decoder reading a run as it arrives has to know that shell
+/// by the time the walk turns up. It grows by one entry per shell, not per
+/// message.
 pub struct Capturing {
     pub written: usize,
+    shells: Shells,
     sink: BufWriter<File>,
 }
 
@@ -63,14 +69,21 @@ impl Rig for BashCap {
     fn open(&self) -> Result<Capturing, Failure> {
         let sink = File::create(&self.into).doing(|| self.writing_to())?;
 
-        Ok(Capturing { written: 0, sink: BufWriter::new(sink) })
+        Ok(Capturing { written: 0, shells: Shells::default(), sink: BufWriter::new(sink) })
     }
 
     /// One JSON object per line, in arrival order. Each carries both clocks,
     /// so ordering downstream is exact and is `sort`'s job.
+    ///
+    /// Every message goes through the register first, whether or not it is one
+    /// of ours: that is what opens a shell and what places the rest under it.
     fn hear(&self, session: &mut Capturing, said: Line) -> Result<(), Failure> {
-        let Some(decoded) = Capture::of(&said) else { return Ok(()) };
         let at = || format!("a snapshot from pid {}", said.sent.pid);
+        let shell = session.shells.hear(&said)?;
+
+        let Some(decoded) = Capture::of(&said, &session.shells.at(shell).bash) else {
+            return Ok(());
+        };
 
         let json = serde_json::to_string(&decoded.doing(at)?).doing(at)?;
         writeln!(session.sink, "{json}").doing(|| self.writing_to())?;

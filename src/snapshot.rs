@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::bash::rig::{field, Doing, Failure, Line, Sent};
+use crate::bash::shell::Bash;
 use crate::bash::stack::{Columns, Stack};
 use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
@@ -60,11 +61,17 @@ pub struct Snapshot {
     pub notes: Vec<String>,
 }
 
-/// One snapshot under the provenance the wire gave it. This is bashcap's
-/// output format — one per line — and what `bashcap show` reads back.
+/// One snapshot under the provenance the wire gave it, and the account the
+/// shell gave of itself. This is bashcap's output format — one per line — and
+/// what `bashcap show` reads back.
+///
+/// The shell rides on every record rather than once per run: a line of JSONL
+/// that has to be read against something else is not one, and what a walk means
+/// depends on which bash took it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capture {
     pub sent: Sent,
+    pub shell: Bash,
     pub snapshot: Snapshot,
 }
 
@@ -72,16 +79,20 @@ impl Capture {
     /// `None` for a line that is not one of ours; `Some(Err)` for one that is
     /// and will not decode. Several tools may share the wire, and only the
     /// second of those is anyone's failure.
-    pub fn of(line: &Line) -> Option<Result<Self, Failure>> {
+    pub fn of(line: &Line, shell: &Bash) -> Option<Result<Self, Failure>> {
         let sections = line.behind(TAG)?;
 
-        Some(Snapshot::decode(sections).map(|snapshot| Self { sent: line.sent.clone(), snapshot }))
+        Some(Snapshot::decode(sections, shell).map(|snapshot| Self {
+            sent: line.sent.clone(),
+            shell: shell.clone(),
+            snapshot,
+        }))
     }
 }
 
 impl Snapshot {
-    fn decode(sections: &[String]) -> Result<Self, Failure> {
-        let stack = Columns::of(sections)?.frames()?;
+    fn decode(sections: &[String], shell: &Bash) -> Result<Self, Failure> {
+        let stack = Columns::of(sections)?.frames(shell)?;
 
         let state = flat(sections, "state")?
             .chunks_exact(2)
