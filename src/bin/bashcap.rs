@@ -55,9 +55,11 @@ fn main() {
             eprintln!("bashcap: {error}");
             1
         }),
+        // `--help` and `--version` are complaints too, and clap gives them
+        // their own code — 0, where a real misuse is 2.
         Err(complaint) => {
             let _ = complaint.print();
-            2
+            complaint.exit_code()
         }
     };
 
