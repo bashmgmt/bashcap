@@ -1,6 +1,6 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
-use crate::bash::rig::{ExitStatus, Master};
+use crate::bash::rig::{Driving, ExitStatus};
 use crate::bashcap::{captures, BashCap};
 use crate::tests::scripts::bash;
 
@@ -55,6 +55,6 @@ fn a_written_capture_reads_back_whole() {
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 
     assert_eq!(read.len(), 1);
-    assert_eq!(read[0].snapshot.stack.at().args.as_deref(), Some(["arg".to_string()].as_slice()));
+    assert_eq!(read[0].snapshot.stack.top().args.as_deref(), Some(["arg".to_string()].as_slice()));
     assert!(read[0].to_string().contains("f@main.bash"), "{}", read[0]);
 }

@@ -26,9 +26,9 @@ pub enum Tracing {
     /// Every frame comes back with the arguments its call was made with —
     /// see [`Frame::args`](crate::bash::stack::Frame::args).
     ///
-    /// Reached through [`Master`](crate::bash::rig::Master), this arms itself
+    /// Reached through [`Driving`](crate::bash::rig::Driving), this arms itself
     /// before the subject's first line. Reached through
-    /// [`Slave`](crate::bash::rig::Slave) it installs a `DEBUG` trap in a shell
+    /// [`Serving`](crate::bash::rig::Serving) it installs a `DEBUG` trap in a shell
     /// that is already running, replacing one the client had.
     Calls,
 }
@@ -37,7 +37,7 @@ pub enum Tracing {
 /// harvests. The frame walk comes with it, since a snapshot reports one.
 pub fn instrument(tracing: Tracing) -> String {
     match tracing {
-        Tracing::Off => stack::with(&[WORDS, EFFECT]),
-        Tracing::Calls => stack::with(&[WORDS, EFFECT, TRACE]),
+        Tracing::Off => stack::with_walk(&[WORDS, EFFECT]),
+        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE]),
     }
 }

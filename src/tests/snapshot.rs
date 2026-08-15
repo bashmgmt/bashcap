@@ -33,8 +33,8 @@ fn a_snapshot_carries_the_whole_shell_state() {
     let deep = &snaps[0].snapshot;
     let names: Vec<String> = deep.stack.frames().map(|frame| frame.site.to_string()).collect();
     assert_eq!(names, ["inner", "outer", "main"]);
-    assert_eq!(deep.stack.at().source.to_string(), "main.bash", "the file, absolute underneath");
-    assert!(deep.stack.at().lineno > 0);
+    assert_eq!(deep.stack.top().source.to_string(), "main.bash", "the file, absolute underneath");
+    assert!(deep.stack.top().lineno > 0);
 
     assert_eq!(deep.vars["greeting"].value, Value::Scalar("hello world".into()));
     assert_eq!(deep.vars["items"].attrs, "a");
@@ -55,11 +55,11 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert!(deep.state.contains_key("seconds"));
     assert!(snaps[0].shell.shlvl > 0);
     assert!(snaps[0].shell.bash.version.at_least(5, 0, 0), "$EPOCHREALTIME is bash 5");
-    assert!(snaps[0].shell.bash.started.from_a_file(), "a script bash was handed to read");
-    assert!(!snaps[0].shell.bash.started.interactive);
+    assert!(snaps[0].shell.bash.invocation.from_a_file(), "a script bash was handed to read");
+    assert!(!snaps[0].shell.bash.invocation.interactive);
 
     let wrapped = &snaps[1].snapshot;
-    assert_eq!(wrapped.stack.at().site.to_string(), "WITH_BASHCAP");
+    assert_eq!(wrapped.stack.top().site.to_string(), "WITH_BASHCAP");
     assert_eq!(wrapped.notes, ["before step"]);
 }
 
@@ -91,6 +91,6 @@ fn the_walk_survives_the_subjects_own_shell_options() {
     );
 
     assert_eq!(snaps.len(), 2, "the script ran on past the first snapshot");
-    assert_eq!(snaps[0].snapshot.stack.at().args, Some(Vec::new()), "f was called with none");
+    assert_eq!(snaps[0].snapshot.stack.top().args, Some(Vec::new()), "f was called with none");
     assert_eq!(snaps[1].snapshot.notes, ["after"]);
 }

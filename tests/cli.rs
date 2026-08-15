@@ -24,7 +24,7 @@ const BASHPROF: &str = env!("CARGO_BIN_EXE_bashprof");
 /// unchanged, and it never runs `shopt` itself.
 #[test]
 fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
-    // Line 1 is where `BASHCAP` fires, line 3 where `step` was called.
+    // Line 1 of the script is where `BASHCAP` fires, line 3 where `step` was called.
     let scripts = Scripts::of(&[(
         "build.bash",
         r#"step() { BASHCAP -BCS:"one step"; }
@@ -121,8 +121,8 @@ fn dying() -> Scripts {
         step()   { echo "the subject's own stdout"; }
         broken() { false; }
 
-        BASHPROF_TIME_CPS ok step
-        BASHPROF_TIME_CPS doomed broken
+        BASHPROF_TIMETHIS ok step
+        BASHPROF_TIMETHIS doomed broken
         "#,
     )])
 }
@@ -185,9 +185,9 @@ fn the_recorded_reading_keeps_the_call_that_never_ended() {
 fn mangled() -> Scripts {
     Scripts::of(&[(
         "build.bash",
-        r#"BASHPROF_TIME_CPS before true
-        BC_INSTR say TIME_CPS BEGIN id 1.99 inside "" label mangled
-        BASHPROF_TIME_CPS after true
+        r#"BASHPROF_TIMETHIS before true
+        BC_INSTR say TIMETHIS BEGIN id 1.99 inside "" label mangled
+        BASHPROF_TIMETHIS after true
         "#,
     )])
 }
@@ -235,7 +235,7 @@ fn the_raw_reading_is_one_message_per_line() {
     // A shell's account of itself is not among these: it is what makes the
     // shell, and what every line then carries whole.
     let kinds: Vec<&str> =
-        heard.iter().map(|said| said["line"]["kind"].as_str().unwrap()).collect();
+        heard.iter().map(|said| said["message"]["verb"].as_str().unwrap()).collect();
     assert_eq!(kinds, ["SAY", "SAY", "SAY"], "{}", ran.into);
     assert!(
         heard.iter().all(|said| said["shell"]["pid"].is_u64()),
@@ -244,11 +244,11 @@ fn the_raw_reading_is_one_message_per_line() {
     );
 
     let said: Vec<&str> =
-        heard.iter().map(|said| said["line"]["words"][1].as_str().unwrap()).collect();
+        heard.iter().map(|said| said["message"]["words"][1].as_str().unwrap()).collect();
 
     assert_eq!(said, ["BEGIN", "END", "BEGIN"], "{}", ran.into);
     assert!(
-        heard.iter().all(|said| said["line"]["words"][0] == "TIME_CPS"),
+        heard.iter().all(|said| said["message"]["words"][0] == "TIMETHIS"),
         "{}",
         ran.into
     );

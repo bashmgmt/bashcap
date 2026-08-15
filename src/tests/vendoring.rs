@@ -38,7 +38,7 @@ fn the_words_name_nothing_a_client_would_not_have() {
 
 #[test]
 fn no_shipped_bash_exports_a_name() {
-    let walk = stack::with(&[]);
+    let walk = stack::with_walk(&[]);
     let shipped =
         [("stack.bash", walk.as_str()), ("bashcap.bash", WORDS), ("effect.bash", EFFECT),
          ("trace.bash", TRACE)];

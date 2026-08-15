@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::bash::rig::Master;
+use crate::bash::rig::Driving;
 use crate::bashcap::{captures, BashCap};
 use crate::tests::scripts::bash;
 
@@ -36,7 +36,7 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
     // every frame's group.
     assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
 
-    let shown = traced[0].snapshot.stack.at().to_string();
+    let shown = traced[0].snapshot.stack.top().to_string();
     assert!(
         shown.ends_with(" ('d one' $'d\\ntwo')"),
         "rendered as the bash that would pass them, newline and all: {shown}"

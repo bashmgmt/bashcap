@@ -6,7 +6,7 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::bash::rig::{field, Doing, Failure, Line, Sent, Shell};
+use crate::bash::rig::{field, Doing, Failure, Message, Shell, Stamp};
 use crate::bash::stack::{Columns, Stack};
 use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
@@ -44,7 +44,7 @@ mod sparse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Captured {
+pub struct Variable {
     pub attrs: String,
     pub value: Value,
 }
@@ -57,34 +57,34 @@ pub struct Snapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rematch: Vec<String>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
-    pub vars: IndexMap<String, Captured>,
+    pub vars: IndexMap<String, Variable>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
 }
 
 /// One snapshot, the shell that took it, and when. This is bashcap's output
-/// format — one per line — and what `bashcap show` reads back.
+/// format — one per message — and what `bashcap show` reads back.
 ///
-/// The shell rides on every record rather than once per run: a line of JSONL
+/// The shell rides on every record rather than once per run: a message of JSONL
 /// that has to be read against something else is not one, and what a walk means
 /// depends on which shell took it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capture {
     pub shell: Arc<Shell>,
-    pub sent: Sent,
+    pub stamp: Stamp,
     pub snapshot: Snapshot,
 }
 
 impl Capture {
-    /// `None` for a line that is not one of ours; `Some(Err)` for one that is
+    /// `None` for a message that is not one of ours; `Some(Err)` for one that is
     /// and will not decode. Several tools may share the wire, and only the
     /// second of those is anyone's failure.
-    pub fn of(line: &Line, shell: &Arc<Shell>) -> Option<Result<Self, Failure>> {
-        let sections = line.behind(TAG)?;
+    pub fn of(message: &Message, shell: &Arc<Shell>) -> Option<Result<Self, Failure>> {
+        let sections = message.behind(TAG)?;
 
         Some(Snapshot::decode(sections, shell).map(|snapshot| Self {
             shell: Arc::clone(shell),
-            sent: line.sent,
+            stamp: message.stamp,
             snapshot,
         }))
     }
@@ -101,7 +101,7 @@ impl Snapshot {
 
         let vars = flat(sections, "vars")?
             .iter()
-            .map(|declaration| captured(declaration))
+            .map(|declaration| variable(declaration))
             .collect::<Result<IndexMap<_, _>, _>>()?;
 
         Ok(Self {
@@ -154,7 +154,7 @@ impl<'a> Declaration<'a> {
 }
 
 /// The attribute letters say which form the right-hand side is in.
-fn captured(text: &str) -> Result<(String, Captured), Failure> {
+fn variable(text: &str) -> Result<(String, Variable), Failure> {
     let Declaration { name, attrs, rhs } = Declaration::read(text)
         .ok_or_else(|| Failure::new("reading a variable", format!("not a declaration: {text:?}")))?;
     let at = || format!("reading the variable {name}");
@@ -167,7 +167,7 @@ fn captured(text: &str) -> Result<(String, Captured), Failure> {
         Value::Scalar(parse_scalar(rhs).doing(at)?)
     };
 
-    Ok((name.to_string(), Captured { attrs, value }))
+    Ok((name.to_string(), Variable { attrs, value }))
 }
 
 #[cfg(test)]
@@ -193,7 +193,7 @@ mod tests {
             ("declare -i n='7'", "n", "i", Value::Scalar("7".into())),
         ];
         for (text, name, attrs, value) in cases {
-            let (got_name, got) = captured(text).unwrap();
+            let (got_name, got) = variable(text).unwrap();
             assert_eq!(got_name, name);
             assert_eq!(got.attrs, attrs, "{text}");
             assert_eq!(got.value, value, "{text}");

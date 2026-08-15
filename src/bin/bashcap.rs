@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 
-use mb_resolver::bash::rig::{Attended, Doing, ExitStatus, Failure, Master, Slave};
+use mb_resolver::bash::rig::{Attended, Doing, Driving, ExitStatus, Failure, Serving};
 use mb_resolver::bashcap::{captures, BashCap};
 
 #[derive(Parser)]

@@ -16,7 +16,9 @@ mod writing;
 
 use std::sync::Arc;
 
-use crate::bash::rig::{Doing, Failure, Laid, Line, Master, Reacting, Rig, Shell};
+use crate::bash::rig::{
+    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Shell, Workspace,
+};
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
 use crate::tests::scripts::{bash, Scripts};
@@ -52,13 +54,17 @@ struct Decoded {
 }
 
 impl Rig for Decoding {
-    type Attending = Decoded;
+    type Reaction = Decoded;
+
+    fn workspace(&self) -> Workspace {
+        Workspace::Temporary
+    }
 
     fn bash(&self) -> String {
         instrument(Tracing::Off)
     }
 
-    fn joined(&self, _at: &Laid, shell: Arc<Shell>) -> Result<Decoded, Failure> {
+    fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {
         Ok(Decoded { shell, seen: Vec::new() })
     }
 }
@@ -66,7 +72,7 @@ impl Rig for Decoding {
 impl Reacting for Decoded {
     type Kept = Vec<Capture>;
 
-    fn hear(&mut self, said: Line) -> Result<(), Failure> {
+    fn hear(&mut self, said: Message) -> Result<(), Failure> {
         let Some(capture) = Capture::of(&said, &self.shell) else {
             return Ok(());
         };
@@ -76,12 +82,19 @@ impl Reacting for Decoded {
         Ok(())
     }
 
+    /// It only listens, so a question is heard and the word reported unknown.
+    fn answer(&mut self, asked: Message) -> Result<Answer, Failure> {
+        self.hear(asked)?;
+
+        Ok(Answer::unknown())
+    }
+
     fn finish(self) -> Result<Vec<Capture>, Failure> {
         Ok(self.seen)
     }
 }
 
-impl Master for Decoding {}
+impl Driving for Decoding {}
 
 /// Every snapshot a script produced, shell by shell in the order they joined.
 fn capture(body: &str) -> Vec<Capture> {

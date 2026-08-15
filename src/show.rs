@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use super::{Capture, Captured, Value};
+use super::{Capture, Variable, Value};
 use crate::bash::rig::{Doing, Failure};
 use crate::bash::value::{emit_assoc, emit_indexed, emit_scalar};
 
@@ -29,7 +29,7 @@ impl fmt::Display for Value {
     }
 }
 
-impl fmt::Display for Captured {
+impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let attrs = if self.attrs.is_empty() { "--" } else { &self.attrs };
 
@@ -42,7 +42,7 @@ impl fmt::Display for Capture {
         writeln!(
             f,
             "pid {} seq {} shlvl {} subshell {}",
-            self.shell.pid, self.sent.seq, self.shell.shlvl, self.shell.subshell
+            self.shell.pid, self.stamp.seq, self.shell.shlvl, self.shell.subshell
         )?;
 
         for frame in self.snapshot.stack.frames() {

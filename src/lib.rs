@@ -12,11 +12,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::bash::rig::{Doing, Failure, Laid, Line, Master, Reacting, Rig, Shell, Slave};
+use crate::bash::rig::{
+    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell, Workspace,
+};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
-pub use snapshot::{Capture, Captured, Snapshot, Value};
+pub use snapshot::{Capture, Variable, Snapshot, Value};
 
 #[cfg(test)]
 mod tests;
@@ -54,7 +56,7 @@ impl BashCap {
 }
 
 impl Rig for BashCap {
-    type Attending = Capturing;
+    type Reaction = Capturing;
 
     /// bashcap's instrument reaches every shell through the prelude, which
     /// is why tracing lives here and not in the command line: `BASH_ENV`
@@ -63,7 +65,11 @@ impl Rig for BashCap {
         instrument(self.tracing)
     }
 
-    fn joined(&self, _at: &Laid, shell: Arc<Shell>) -> Result<Capturing, Failure> {
+    fn workspace(&self) -> Workspace {
+        Workspace::Temporary
+    }
+
+    fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
         Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }
 }
@@ -92,7 +98,7 @@ impl Reacting for Capturing {
 
     /// One JSON object per line, in arrival order. Each carries both clocks, so
     /// ordering downstream is exact and is `sort`'s job.
-    fn hear(&mut self, said: Line) -> Result<(), Failure> {
+    fn hear(&mut self, said: Message) -> Result<(), Failure> {
         let at = || format!("a snapshot from pid {}", self.shell.pid);
 
         let Some(decoded) = Capture::of(&said, &self.shell) else {
@@ -104,6 +110,14 @@ impl Reacting for Capturing {
         self.written += 1;
 
         Ok(())
+    }
+
+    /// bashcap only listens, so a shell that asks it something is told the word
+    /// is unknown.
+    fn answer(&mut self, asked: Message) -> Result<Answer, Failure> {
+        self.hear(asked)?;
+
+        Ok(Answer::unknown())
     }
 
     /// A failed flush ends the run rather than being lost in a `Drop`. The sink
@@ -119,8 +133,8 @@ impl Reacting for Capturing {
 /// Either orchestration: the instrument is the same text, and what it harvests
 /// is the same either way.
 ///
-/// [`Tracing::Calls`] is the exception in degree: reached as a `Master` it arms
-/// itself before the subject's first line, reached as a `Slave` it installs a
+/// [`Tracing::Calls`] is the exception in degree: reached as a `Driving` it arms
+/// itself before the subject's first line, reached as a `Serving` it installs a
 /// `DEBUG` trap in a shell that is already running.
-impl Master for BashCap {}
-impl Slave for BashCap {}
+impl Driving for BashCap {}
+impl Serving for BashCap {}

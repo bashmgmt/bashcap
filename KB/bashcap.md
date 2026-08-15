@@ -123,7 +123,7 @@ pub enum Tracing { Off, Calls }
 pub fn instrument(tracing: Tracing) -> String;
 
 pub struct Capture {
-    pub sent: Sent,
+    pub stamp: Stamp,
     pub shell: Bash,      // what the shell said of itself when it joined
     pub snapshot: Snapshot,
 }
@@ -132,7 +132,7 @@ pub struct Snapshot {
     pub stack: Stack,
     pub state: IndexMap<String, String>,   // what only this moment can say
     pub rematch: Vec<String>,
-    pub vars: IndexMap<String, Captured>,
+    pub vars: IndexMap<String, Variable>,
     pub notes: Vec<String>,
 }
 
@@ -146,7 +146,7 @@ pub struct Frame {
     pub args: Option<Vec<String>>,
 }
 
-pub struct Captured { pub attrs: String, pub value: Value }
+pub struct Variable { pub attrs: String, pub value: Value }
 pub enum Value { Scalar(String), Indexed(IndexMap<usize, String>), Assoc(IndexMap<String, String>) }
 
 /// One snapshot under the provenance the wire gave it — the output format,
@@ -229,11 +229,11 @@ pub struct BashCap   { into: PathBuf, sink: Sink, tracing: Tracing }
 pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: usize }
 
 impl Rig for BashCap {
-    type Attending = Capturing;
+    type Reaction = Capturing;
 
     fn bash(&self) -> String { instrument(self.tracing) }
 
-    fn joined(&self, _at: &Laid, shell: Arc<Shell>) -> Result<Capturing, Failure> {
+    fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
         Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }
 }
@@ -288,7 +288,7 @@ number.
 
 ## Rendering
 
-`Display` on `Capture`, `Frame`, `Captured` and `Value`, and nothing else
+`Display` on `Capture`, `Frame`, `Variable` and `Value`, and nothing else
 renders. A value prints as the bash that would declare it, because
 `bash::value`'s emitters already do exactly that:
 
