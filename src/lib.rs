@@ -6,6 +6,7 @@ mod show;
 mod snapshot;
 
 use std::cell::RefCell;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -13,8 +14,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::bash::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Setup, Shell,
-    Workspace,
+    Answer, Doing, Driving, Failure, Layout, Message, Reaching, Reacting, Rig, Serving, Setup,
+    Shell, Workspace,
 };
 
 pub use instrument::{instrument, Tracing};
@@ -28,22 +29,25 @@ mod tests;
 /// rig's and each reaction holds a share.
 type Sink = Rc<RefCell<BufWriter<File>>>;
 
-/// Where the capture goes, and whether to ask the shell to record the
-/// arguments each call was made with.
+/// Where the capture goes, how a driven subject's shells find the instrument,
+/// and whether to ask the shell to record the arguments each call was made
+/// with.
 pub struct BashCap {
     into: PathBuf,
     sink: Sink,
+    reaching: Reaching,
     tracing: Tracing,
 }
 
 impl BashCap {
     /// Opens the file, truncating it: an unwritable path is a failure of the
     /// caller's own before any shell has run.
-    pub fn writing(into: impl Into<PathBuf>) -> Result<Self, Failure> {
+    pub fn writing(into: impl Into<PathBuf>, reaching: Reaching) -> Result<Self, Failure> {
         let into = into.into();
         let file = File::create(&into).doing(|| format!("writing {}", into.display()))?;
+        let sink = Rc::new(RefCell::new(BufWriter::new(file)));
 
-        Ok(Self { into, sink: Rc::new(RefCell::new(BufWriter::new(file))), tracing: Tracing::Off })
+        Ok(Self { into, sink, reaching, tracing: Tracing::Off })
     }
 
     /// Ask the subject's shells to record what each call was passed. This
@@ -133,5 +137,10 @@ impl Reacting for Capturing {
 /// [`Tracing::Calls`] is the exception in degree: reached as a `Driving` it arms
 /// itself before the subject's first line, reached as a `Serving` it installs a
 /// `DEBUG` trap in a shell that is already running.
-impl Driving for BashCap {}
+impl Driving for BashCap {
+    fn environment(&self, at: &Layout) -> Vec<(OsString, OsString)> {
+        self.reaching.environment(at)
+    }
+}
+
 impl Serving for BashCap {}
