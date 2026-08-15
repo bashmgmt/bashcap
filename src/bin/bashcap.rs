@@ -1,18 +1,21 @@
 //! A transparent bash wrapper: write the full state of every shell at every
 //! `BASHCAP` call site.
 //!
-//! Two ways in, and they differ only in who started the shells. `run_bash_env`
-//! starts a command line and reaches its whole process tree through
-//! `BASH_ENV`; `serve` is started *by* a bash script and hands that script the
-//! address to join. What is captured, and where it goes, is the same either
-//! way — which is why both take the same options, from the same type.
+//! Two ways in, and they differ only in who started the shells. `run` starts
+//! a command line, exports the session's address into it and — unless told
+//! otherwise — `BASH_ENV`, so its whole process tree joins; `serve` is started
+//! *by* a bash script and hands that script the address to join. What is
+//! captured, and where it goes, is the same either way — which is why both
+//! take the same options, from the same type.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 
-use mb_resolver::bash::rig::{Attended, Doing, Driving, ExitStatus, Failure, Serving};
+use mb_resolver::bash::rig::{
+    Attended, Doing, Driving, ExitStatus, Failure, Reaching, Serving, JOINING,
+};
 use mb_resolver::bashcap::{captures, BashCap};
 
 #[derive(Parser)]
@@ -24,12 +27,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum What {
-    /// Run a command line under capture, reaching every shell it starts
-    /// through BASH_ENV.
-    #[command(name = "run_bash_env")]
-    RunBashEnv {
+    /// Run a command line under capture. Every shell finds the session's
+    /// address in BC_SESSION; --reach says whether it has already joined.
+    #[command(after_long_help = JOINING)]
+    Run {
         #[command(flatten)]
         capture: Capture,
+
+        /// How the shells find the instrument: bash-env has every
+        /// non-interactive bash in the tree join as it starts; by-hand leaves
+        /// it to the scripts, which join with `source "$BC_SESSION"`.
+        #[arg(long, value_enum, default_value_t = Reaching::BashEnv)]
+        reach: Reaching,
 
         /// The wrapped command, program included — `bash build.bash`, or
         /// `make test`, whose own shells join too. Everything from the first
@@ -42,6 +51,7 @@ enum What {
     /// Capture for a bash script that started this process as a coprocess: it
     /// holds this process's standard input, and reads the address to join from
     /// its standard output.
+    #[command(after_long_help = JOINING)]
     Serve {
         #[command(flatten)]
         capture: Capture,
@@ -77,8 +87,8 @@ struct Capture {
 impl Capture {
     /// The tool this asks for. The file is opened here, so a path that cannot
     /// be written is known before any shell has run.
-    fn tool(&self) -> Result<BashCap, Failure> {
-        let bashcap = BashCap::writing(&self.into)?;
+    fn tool(&self, reaching: Reaching) -> Result<BashCap, Failure> {
+        let bashcap = BashCap::writing(&self.into, reaching)?;
 
         Ok(match self.trace_calls {
             true => bashcap.tracing_calls(),
@@ -98,8 +108,8 @@ impl Capture {
 
     /// The exit code is the subject's, so a wrapped script is indistinguishable
     /// from an unwrapped one.
-    async fn run(&self, argv: &[String]) -> Result<ExitStatus, Failure> {
-        let ran = self.tool()?.run(argv).await?;
+    async fn run(&self, reaching: Reaching, argv: &[String]) -> Result<ExitStatus, Failure> {
+        let ran = self.tool(reaching)?.run(argv).await?;
 
         self.tally(&ran.shells);
 
@@ -112,9 +122,10 @@ impl Capture {
     }
 
     /// Nothing here starts a shell or ends one, so there is no subject's status
-    /// to hand back — only whether the capture itself came out whole.
+    /// to hand back — only whether the capture itself came out whole. What the
+    /// address reaches is the client's, so `reaching` is moot.
     async fn serve(&self) -> Result<(), Failure> {
-        let served = self.tool()?.serve_coprocess().await?;
+        let served = self.tool(Reaching::ByHand)?.serve_coprocess().await?;
 
         self.tally(&served.shells);
 
@@ -140,11 +151,13 @@ async fn main() {
     std::process::exit(code);
 }
 
-/// The exit code the subcommand earned. Only `run_bash_env` has one of its own
-/// — it is the subject's — and everything that fails does so the same way.
+/// The exit code the subcommand earned. Only `run` has one of its own — it is
+/// the subject's — and everything that fails does so the same way.
 async fn perform(what: &What) -> Result<i32, Failure> {
     match what {
-        What::RunBashEnv { capture, argv } => capture.run(argv).await.map(ExitStatus::shell_code),
+        What::Run { capture, reach, argv } => {
+            capture.run(*reach, argv).await.map(ExitStatus::shell_code)
+        }
         What::Serve { capture } => capture.serve().await.map(|()| 0),
         What::Show { from } => show(from).map(|()| 0),
     }

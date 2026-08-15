@@ -1,6 +1,6 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
-use crate::bash::rig::{Driving, ExitStatus};
+use crate::bash::rig::{Driving, ExitStatus, Reaching};
 use crate::bashcap::{captures, BashCap};
 use crate::tests::scripts::bash;
 
@@ -16,7 +16,7 @@ async fn each_snapshot_is_written_as_it_arrives() {
     );
     let into = scripts.at("out.jsonl");
 
-    let ran = BashCap::writing(&into)
+    let ran = BashCap::writing(&into, Reaching::BashEnv)
         .unwrap()
         .run(&bash(scripts.at(ENTRY)))
         .await
@@ -55,7 +55,7 @@ async fn a_written_capture_reads_back_whole() {
     );
     let into = scripts.at("out.jsonl");
 
-    BashCap::writing(&into).unwrap().run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
+    BashCap::writing(&into, Reaching::BashEnv).unwrap().run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
 
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 

@@ -14,10 +14,12 @@ mod tracing;
 mod vendoring;
 mod writing;
 
+use std::ffi::OsString;
 use std::sync::Arc;
 
 use crate::bash::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Setup, Shell, Workspace,
+    Answer, Doing, Driving, Failure, Layout, Message, Reaching, Reacting, Rig, Setup, Shell,
+    Workspace,
 };
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
@@ -89,7 +91,11 @@ impl Reacting for Decoded {
     }
 }
 
-impl Driving for Decoding {}
+impl Driving for Decoding {
+    fn environment(&self, at: &Layout) -> Vec<(OsString, OsString)> {
+        Reaching::BashEnv.environment(at)
+    }
+}
 
 /// Every snapshot a script produced, shell by shell in the order they joined.
 async fn capture(body: &str) -> Vec<Capture> {

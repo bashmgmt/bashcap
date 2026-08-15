@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::bash::rig::Driving;
+use crate::bash::rig::{Driving, Reaching};
 use crate::bashcap::{captures, BashCap};
 use crate::tests::scripts::bash;
 
@@ -68,7 +68,7 @@ async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     };
 
     let plain = scripts.at("plain.jsonl");
-    let bare = ran(BashCap::writing(&plain).unwrap(), &plain).await;
+    let bare = ran(BashCap::writing(&plain, Reaching::BashEnv).unwrap(), &plain).await;
     assert_eq!(bare.len(), 2, "one snapshot from each shell");
     assert!(
         bare.iter().flat_map(|seen| seen.snapshot.stack.frames()).all(|frame| frame.args.is_none()),
@@ -76,7 +76,7 @@ async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     );
 
     let full = scripts.at("traced.jsonl");
-    let traced = ran(BashCap::writing(&full).unwrap().tracing_calls(), &full).await;
+    let traced = ran(BashCap::writing(&full, Reaching::BashEnv).unwrap().tracing_calls(), &full).await;
     let called: Vec<Vec<&[String]>> = traced
         .iter()
         .map(|seen| {

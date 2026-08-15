@@ -36,7 +36,7 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
     let into = scripts.at("capture.jsonl");
 
     let ran = Command::new(BASHCAP)
-        .args(["run_bash_env", "--into"])
+        .args(["run", "--into"])
         .arg(&into)
         .args(["--trace-calls", "--", "bash"])
         .arg(scripts.at("build.bash"))
@@ -71,7 +71,7 @@ fn without_the_switch_nothing_is_traced() {
     let into = scripts.at("capture.jsonl");
 
     let ran = Command::new(BASHCAP)
-        .args(["run_bash_env", "--into"])
+        .args(["run", "--into"])
         .arg(&into)
         .args(["--", "bash"])
         .arg(scripts.at("build.bash"))
@@ -86,6 +86,50 @@ fn without_the_switch_nothing_is_traced() {
     assert!(!text.contains("a target"), "no arguments were recorded to report: {text}");
 }
 
+/// `--reach by-hand` exports the address and nothing else: the script joins
+/// where it says `source "$BC_SESSION"`, and a shell it started before that is
+/// not a shell of the run.
+#[test]
+fn reach_by_hand_leaves_joining_to_the_script() {
+    let scripts = Scripts::of(&[(
+        "build.bash",
+        r#"bash -c 'type BASHCAP >/dev/null 2>&1 && echo "joined without asking" >&2'
+        source "$BC_SESSION"
+        BASHCAP -BCS:"by hand"
+        "#,
+    )]);
+    let into = scripts.at("capture.jsonl");
+
+    let ran = Command::new(BASHCAP)
+        .args(["run", "--reach", "by-hand", "--into"])
+        .arg(&into)
+        .args(["--", "bash"])
+        .arg(scripts.at("build.bash"))
+        .output()
+        .expect("the built bashcap");
+    assert_eq!(ran.status.code(), Some(0));
+    assert!(ran.stderr.is_empty(), "{}", String::from_utf8_lossy(&ran.stderr));
+
+    let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
+    let text = String::from_utf8(shown.stdout).unwrap();
+
+    assert!(text.contains("1 snapshots from 1 shells"), "{text}");
+    assert!(text.contains("note  by hand"), "{text}");
+}
+
+/// Both binaries tell a script how to join, under `--help` of the two verbs
+/// that open a session.
+#[test]
+fn help_says_how_a_script_joins() {
+    for (binary, verb) in [(BASHCAP, "run"), (BASHCAP, "serve"), (BASHPROF, "run"), (BASHPROF, "serve")] {
+        let help = Command::new(binary).args([verb, "--help"]).output().expect("--help");
+        let text = String::from_utf8(help.stdout).unwrap();
+
+        assert!(text.contains(r#"source "$BC_SESSION""#), "{binary} {verb} --help:\n{text}");
+        assert!(text.contains("BC_START"), "{binary} {verb} --help:\n{text}");
+    }
+}
+
 /// One run, and what it wrote where it was told to.
 struct Ran {
     status: Option<i32>,
@@ -97,7 +141,7 @@ struct Ran {
 fn bashprof(scripts: &Scripts, output: &[&str]) -> Ran {
     let into = scripts.at("reading.json");
     let ran = Command::new(BASHPROF)
-        .args(["run_bash_env", "--into"])
+        .args(["run", "--into"])
         .arg(&into)
         .args(output)
         .args(["--", "bash"])
