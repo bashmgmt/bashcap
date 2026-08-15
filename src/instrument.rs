@@ -37,10 +37,12 @@ pub enum Tracing {
 const JOIN: &str = "BC_JOIN BASHCAP\n";
 
 /// The bash a rig hands the subject, for any rig that wants what bashcap
-/// harvests. The frame walk comes with it, since a snapshot reports one.
+/// harvests. The frame walk comes with it, since a snapshot reports one. The
+/// join comes before the trace: `TRACE` arms itself from the next command,
+/// which must be the subject's, not the join.
 pub fn instrument(tracing: Tracing) -> String {
     match tracing {
         Tracing::Off => stack::with_walk(&[WORDS, EFFECT, JOIN]),
-        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE, JOIN]),
+        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, JOIN, TRACE]),
     }
 }
