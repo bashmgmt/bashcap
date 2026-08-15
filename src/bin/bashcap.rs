@@ -55,6 +55,12 @@ enum What {
     Serve {
         #[command(flatten)]
         capture: Capture,
+
+        /// The workspace the session is laid in — the client's choice, so the
+        /// client knows the address, AT/session.bash, before this runs.
+        /// Created if missing, left behind.
+        #[arg(long)]
+        at: PathBuf,
     },
 
     /// Render a capture written by either of them.
@@ -125,8 +131,8 @@ impl Capture {
     /// Nothing here starts a shell or ends one, so there is no subject's status
     /// to hand back — only whether the capture itself came out whole. What the
     /// address reaches is the client's: `Serving` reads no `Reaching`.
-    async fn serve(&self) -> Result<(), Failure> {
-        let served = self.tool(Reaching::ByHand)?.serve_coprocess().await?;
+    async fn serve(&self, at: &Path) -> Result<(), Failure> {
+        let served = self.tool(Reaching::ByHand)?.serve_coprocess(at).await?;
 
         self.tally(&served.shells);
 
@@ -159,7 +165,7 @@ async fn perform(what: &What) -> Result<i32, Failure> {
         What::Run { capture, reach, argv } => {
             capture.run(*reach, argv).await.map(ExitStatus::shell_code)
         }
-        What::Serve { capture } => capture.serve().await.map(|()| 0),
+        What::Serve { capture, at } => capture.serve(at).await.map(|()| 0),
         What::Show { from } => show(from).map(|()| 0),
     }
 }

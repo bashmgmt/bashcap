@@ -19,10 +19,9 @@ use std::sync::Arc;
 
 use crate::bash::rig::{
     Answer, Doing, Driving, Failure, Layout, Message, Reaching, Reacting, Rig, Setup, Shell,
-    Workspace,
 };
 use crate::bashcap::instrument::WORDS;
-use crate::bashcap::{instrument, Capture, Tracing};
+use crate::bashcap::{instrument, Capture, Tracing, LABEL};
 use crate::tests::scripts::{bash, Scripts};
 
 /// What a shipped script writes: strict options, the words beside it, and one
@@ -59,7 +58,7 @@ impl Rig for Decoding {
     type Reaction = Decoded;
 
     fn setup(&self) -> Setup {
-        Setup { bash: instrument(Tracing::Off), workspace: Workspace::Temporary }
+        Setup { label: LABEL.to_string(), bash: instrument(Tracing::Off) }
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {

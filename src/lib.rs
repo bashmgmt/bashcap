@@ -15,10 +15,10 @@ use std::sync::Arc;
 
 use crate::bash::rig::{
     Answer, Doing, Driving, Failure, Layout, Message, Reaching, Reacting, Rig, Serving, Setup,
-    Shell, Workspace,
+    Shell,
 };
 
-pub use instrument::{instrument, Tracing};
+pub use instrument::{instrument, Tracing, LABEL};
 pub use show::captures;
 pub use snapshot::{Capture, Variable, Snapshot, Value};
 
@@ -67,7 +67,7 @@ impl Rig for BashCap {
     /// tracing lives here and not on the command line: `BASH_ENV` reaches a
     /// subject's children, its argv does not.
     fn setup(&self) -> Setup {
-        Setup { bash: instrument(self.tracing), workspace: Workspace::Temporary }
+        Setup { label: LABEL.to_string(), bash: instrument(self.tracing) }
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {

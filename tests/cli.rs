@@ -383,7 +383,9 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
 
     let ran = Command::new("bash")
         .arg(scripts.at("work.bash"))
-        .args([BASHCAP, "serve", "--verbose", "--trace-calls", "--into"])
+        .args([BASHCAP, "serve", "--at"])
+        .arg(scripts.at("session.d"))
+        .args(["--verbose", "--trace-calls", "--into"])
         .arg(&into)
         .output()
         .expect("bash");

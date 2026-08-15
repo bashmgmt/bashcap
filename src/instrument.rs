@@ -33,16 +33,18 @@ pub enum Tracing {
     Calls,
 }
 
-/// The label bashcap's words speak under.
-const JOIN: &str = "BC_JOIN BASHCAP\n";
+/// The label bashcap's words speak under: what a rig reusing
+/// [`instrument`] joins.
+pub const LABEL: &str = "BASHCAP";
 
 /// The bash a rig hands the subject, for any rig that wants what bashcap
-/// harvests. The frame walk comes with it, since a snapshot reports one. The
-/// join comes before the trace: `TRACE` arms itself from the next command,
-/// which must be the subject's, not the join.
+/// harvests. The frame walk comes with it, since a snapshot reports one.
+/// `TRACE` is last: it arms itself from the next command bash runs, which
+/// must be the subject's — and is, because the invocation joins first and
+/// sources this file last.
 pub fn instrument(tracing: Tracing) -> String {
     match tracing {
-        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, JOIN]),
-        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, JOIN, TRACE]),
+        Tracing::Off => stack::with_walk(&[WORDS, EFFECT]),
+        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE]),
     }
 }
