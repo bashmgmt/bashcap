@@ -39,7 +39,7 @@ reached through `serve` it installs a `DEBUG` trap in a shell that is already
 running, replacing one the client had.
 
 A client that only ever runs under `serve` vendors nothing at all: joining
-injects the words, so `BASHCAP` is defined from the moment `BC_JOIN` returns.
+injects the words, so `BASHCAP` is defined from the moment `BC_START` returns.
 
 `show` renders a capture through `Capture`'s `Display`, which is the same
 text a library caller gets from `println!("{capture}")`. One rendering, in
@@ -86,9 +86,8 @@ reports a stack, and contributes six sections of its own — see
 
 `state` holds only what changes while a shell runs and nothing else records —
 `$SECONDS`. Which bash it is, how it was started and which options it had on
-were said once when the shell joined ([tree.md](tree.md)); `$SHLVL` rides on
-every message already ([wire.md](wire.md#messages)). A snapshot repeating any
-of those would be a second source for one fact.
+were said once when the shell joined ([shell.md](shell.md)), and `$SHLVL` with
+them. A snapshot repeating any of those would be a second source for one fact.
 
 Two details in the bash worth knowing:
 
@@ -152,7 +151,8 @@ pub enum Value { Scalar(String), Indexed(IndexMap<usize, String>), Assoc(IndexMa
 /// One snapshot under the provenance the wire gave it — the output format,
 /// one per line, and what `show` reads back.
 pub struct Capture {
-    pub sent_at: u64, pub heard_at: u64, pub pid: u32, pub seq: u32,
+    pub shell: Arc<Shell>,
+    pub stamp: Stamp,
     pub snapshot: Snapshot,
 }
 
@@ -216,9 +216,9 @@ contributed, `flat` reads the rest with `parse_array`, and
 `Declaration::read` parses `declare -aX name=rhs` back into a name, its
 attribute letters, and its value.
 
-Note what the snapshot does **not** carry: a timestamp, a pid, or a parent.
-The clocks are on the message, and everything about the shell is on the shell —
-which a reaction was handed at construction. See [tree.md](tree.md).
+Note what the snapshot does **not** carry: a timestamp or a pid. The clocks
+are on the message, and everything about the shell is on the shell — which a
+reaction was handed at construction. See [shell.md](shell.md).
 
 ## The tool
 
@@ -231,9 +231,11 @@ pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: us
 impl Rig for BashCap {
     type Reaction = Capturing;
 
-    fn bash(&self) -> String { instrument(self.tracing) }
+    fn setup(&self) -> Setup {
+        Setup { bash: instrument(self.tracing), workspace: Workspace::Temporary }
+    }
 
-    fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
+    async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
         Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }
 }
@@ -241,13 +243,14 @@ impl Rig for BashCap {
 impl Reacting for Capturing {
     type Kept = usize;   // how many this shell wrote; what they said is in the file
 
-    fn hear(&mut self, said: Line) -> Result<(), Failure> { /* decodes and writes */ }
-    fn finish(self) -> Result<usize, Failure> { /* flushes */ }
+    async fn hear(&mut self, said: Message) -> Result<(), Failure> { /* decodes and writes */ }
+    async fn answer(&mut self, asked: Message) -> Result<Answer, Failure> { /* hears it; unknown */ }
+    async fn finish(self) -> Result<usize, Failure> { /* flushes */ }
 }
 ```
 
-`answer` is inherited: bashcap only listens, so a shell that asks it something
-is told the word is unknown.
+bashcap only listens, so a shell that asks it something is heard and told the
+word is unknown.
 
 **One file, one reaction per shell.** `BashCap::writing` opens the file, so a
 path that cannot be written is a failure before any shell has run, and each
@@ -256,7 +259,7 @@ shell it was taken in, and this one had it before its first message could
 arrive.
 
 ```rust
-let ran = BashCap::writing(into)?.run(argv)?.whole()?;
+let ran = BashCap::writing(into)?.run(argv).await?.whole()?;
 let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
 ```
 
@@ -276,8 +279,8 @@ under the provenance it wants:
 `Capture` is that row, and `serde(flatten)` puts the provenance beside the
 snapshot's own fields rather than above them.
 
-Lines are written in **arrival** order, each carrying the shell's own clock
-and the run's, so ordering downstream is exact and is `sort`'s job. Writing in
+Lines are written as they arrive, each carrying the shell's own clock and the
+run's, so ordering downstream is exact and is `sort`'s job. Writing in
 `hear` keeps resident memory independent of run length — see
 [measurements.md](measurements.md#memory).
 
@@ -293,7 +296,7 @@ renders. A value prints as the bash that would declare it, because
 `bash::value`'s emitters already do exactly that:
 
 ```
-[3] pid 488092 seq 0 shlvl 7 subshell 0
+[3] pid 488092 at 1786796436346775 shlvl 7 subshell 0
     at    child_work@child.bash:12 ('a first argument' 'a second')
     at    main@child.bash:14 ()
     note  child process, own pid and SHLVL
