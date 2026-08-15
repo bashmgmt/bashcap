@@ -186,7 +186,7 @@ fn mangled() -> Scripts {
     Scripts::of(&[(
         "build.bash",
         r#"BASHPROF_TIMETHIS before true
-        BC_INSTR say TIMETHIS BEGIN id 1.99 inside "" label mangled
+        BC_INSTR BASHPROF say TIMETHIS BEGIN id 1.99 inside "" label mangled
         BASHPROF_TIMETHIS after true
         "#,
     )])
@@ -324,7 +324,7 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
         &format!(
             r#"set -euo pipefail
             source {:?}
-            BC_JOIN "$@"
+            BC_START "$@"
 
             step() {{ BASHCAP -BCS:"in a served shell"; }}
             step 'a target'
