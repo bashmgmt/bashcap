@@ -26,10 +26,10 @@ pub enum Tracing {
     /// Every frame comes back with the arguments its call was made with —
     /// see [`Frame::args`](crate::bash::stack::Frame::args).
     ///
-    /// Reached through [`Driving`](crate::bash::rig::Driving), this arms itself
-    /// before the subject's first line. Reached through
-    /// [`Serving`](crate::bash::rig::Serving) it installs a `DEBUG` trap in a shell
-    /// that is already running, replacing one the client had.
+    /// Sourced through `BASH_ENV`, this arms itself before the subject's first
+    /// line. Sourced into a shell that is already running — by hand, or under
+    /// [`Serving`](crate::bash::rig::Serving) — it installs a `DEBUG` trap
+    /// there, replacing one the client had.
     Calls,
 }
 

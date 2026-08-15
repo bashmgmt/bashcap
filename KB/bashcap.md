@@ -19,8 +19,8 @@ core, with typed captures for a session, `instrument(Tracing::Calls)` for the
 full stack, and no command line in between.
 
 ```
-bashcap run_bash_env --into FILE [--verbose] [--trace-calls] [--] <command…>
-bashcap serve        --into FILE [--verbose] [--trace-calls]
+bashcap run   [--reach bash-env|by-hand] --into FILE [--verbose] [--trace-calls] [--] <command…>
+bashcap serve --into FILE [--verbose] [--trace-calls]
 bashcap show FILE
 ```
 
@@ -29,14 +29,15 @@ from the same `Capture` struct — the symmetry is the code, not a convention:
 
 | | who starts the shells | how they are reached | its exit code |
 |---|---|---|---|
-| `run_bash_env` | the tool, from the command line it was given | `BASH_ENV`, so the whole process tree joins | the subject's |
-| `serve` | a bash script, which started this process as a coprocess | the address, written on stdout for the client to run | its own: 0, or 1 if the capture did not come out |
+| `run` | the tool, from the command line it was given | `BC_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
+| `serve` | a bash script, which started this process as a coprocess | the address, written on stdout for the client to source | its own: 0, or 1 if the capture did not come out |
 
 `--verbose` goes to stderr in both, because under `serve` stdout is the channel
 the address goes out on. `--trace-calls` differs in degree rather than kind:
-reached through `run_bash_env` it arms itself before the subject's first line,
-reached through `serve` it installs a `DEBUG` trap in a shell that is already
-running, replacing one the client had.
+sourced through `BASH_ENV` it arms itself before the subject's first line,
+sourced into a shell that is already running — by hand, or under `serve` — it
+installs a `DEBUG` trap there, replacing one the client had. `run --help` and
+`serve --help` end with `JOINING`, every way a script joins.
 
 A client that only ever runs under `serve` vendors nothing at all: joining
 injects the words, so `BASHCAP` is defined from the moment `BC_START` returns.
@@ -176,7 +177,7 @@ while a decode failure stays visible.
 Bash records them only under `extdebug`, and **bashcap never turns it on**.
 Three reasons, each sufficient:
 
-- From `BASH_ENV` — the only injection point there is — `shopt -s extdebug`
+- From `BASH_ENV` — the usual injection point — `shopt -s extdebug`
   means *start the debugger*. Bash warns on the subject's stderr, disables
   debugging mode, and records nothing; where `bashdb` is installed it would
   attach a debugger to the subject.
@@ -225,7 +226,7 @@ reaction was handed at construction. See [shell.md](shell.md).
 ```rust
 type Sink = Rc<RefCell<BufWriter<File>>>;
 
-pub struct BashCap   { into: PathBuf, sink: Sink, tracing: Tracing }
+pub struct BashCap   { into: PathBuf, sink: Sink, reaching: Reaching, tracing: Tracing }
 pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: usize }
 
 impl Rig for BashCap {
@@ -259,16 +260,16 @@ shell it was taken in, and this one had it before its first message could
 arrive.
 
 ```rust
-let ran = BashCap::writing(into)?.run(argv).await?.whole()?;
+let ran = BashCap::writing(into, Reaching::BashEnv)?.run(argv).await?.whole()?;
 let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
 ```
 
 The tally is a sum over the shells rather than a counter beside them — one
 source for one fact.
 
-The wrapped command carries its own program, so `bashcap run_bash_env --into
-out bash build.bash` is the ordinary form and `bashcap run_bash_env --into out
-make test` also works: every bash `make` starts reads the same `BASH_ENV`.
+The wrapped command carries its own program, so `bashcap run --into out bash
+build.bash` is the ordinary form and `bashcap run --into out make test` also
+works: every bash `make` starts reads the same `BASH_ENV`.
 
 A failed flush in `end` ends the run rather than being lost in a `Drop`.
 
@@ -313,7 +314,7 @@ that calls `run`. Four properties of a transparent wrapper:
 
 - **`--into` is required**; there is no default output location.
 - **stderr belongs to the subject** unless `--verbose` is passed.
-- **The first plain word ends bashcap's options.** `bashcap run_bash_env --into out
+- **The first plain word ends bashcap's options.** `bashcap run --into out
   build.bash --into elsewhere` passes `--into elsewhere` to the script. An
   unknown flag before that point is an error, and `--` takes a wrapped command
   that starts with a dash.

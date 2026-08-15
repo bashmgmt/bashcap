@@ -134,9 +134,9 @@ impl Reacting for Capturing {
 /// Either orchestration: the instrument is the same text, and what it harvests
 /// is the same either way.
 ///
-/// [`Tracing::Calls`] is the exception in degree: reached as a `Driving` it arms
-/// itself before the subject's first line, reached as a `Serving` it installs a
-/// `DEBUG` trap in a shell that is already running.
+/// [`Tracing::Calls`] is the exception in degree: sourced through `BASH_ENV`
+/// it arms itself before the subject's first line, sourced into a running
+/// shell it installs a `DEBUG` trap there.
 impl Driving for BashCap {
     fn environment(&self, at: &Layout) -> Vec<(OsString, OsString)> {
         self.reaching.environment(at)

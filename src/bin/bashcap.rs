@@ -78,8 +78,9 @@ struct Capture {
 
     /// Record what each call was passed. This asks the subject's shells for
     /// `extdebug`, which also makes ERR, DEBUG and RETURN traps inherited by
-    /// functions and subshells. Under `serve` it installs a DEBUG trap in a
-    /// shell that is already running, replacing one the client had.
+    /// functions and subshells. Sourced into a shell that is already running —
+    /// under `serve`, or `--reach by-hand` — it installs a DEBUG trap there,
+    /// replacing one the client had.
     #[arg(long)]
     trace_calls: bool,
 }
@@ -123,7 +124,7 @@ impl Capture {
 
     /// Nothing here starts a shell or ends one, so there is no subject's status
     /// to hand back — only whether the capture itself came out whole. What the
-    /// address reaches is the client's, so `reaching` is moot.
+    /// address reaches is the client's: `Serving` reads no `Reaching`.
     async fn serve(&self) -> Result<(), Failure> {
         let served = self.tool(Reaching::ByHand)?.serve_coprocess().await?;
 
