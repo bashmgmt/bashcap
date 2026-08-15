@@ -17,10 +17,10 @@ mod writing;
 use std::sync::Arc;
 
 use crate::bash::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reached, Reaching, Reacting, Rig, Setup, Shell,
+    Answer, Doing, Driving, Failure, Layout, Message, Reached, Reaching, Reacting, Rig, Shell,
 };
 use crate::bashcap::instrument::WORDS;
-use crate::bashcap::{instrument, Capture, Tracing, LABEL};
+use crate::bashcap::{instrument, Capture, Tracing};
 use crate::tests::scripts::{bash, Scripts};
 
 /// What a shipped script writes: strict options, the words beside it, and one
@@ -56,8 +56,8 @@ struct Decoded {
 impl Rig for Decoding {
     type Reaction = Decoded;
 
-    fn setup(&self) -> Setup {
-        Setup { label: LABEL.to_string(), bash: instrument(Tracing::Off) }
+    fn bash(&self) -> String {
+        instrument(Tracing::Off)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {

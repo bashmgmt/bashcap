@@ -12,11 +12,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::bash::rig::{
-    Answer, Doing, Failure, Layout, Message, Reacting, Rig, Serving, Setup, Shell,
-};
+use crate::bash::rig::{Answer, Doing, Failure, Layout, Message, Reacting, Rig, Serving, Shell};
 
-pub use instrument::{instrument, Tracing, LABEL};
+pub use instrument::{instrument, Tracing};
 pub use show::captures;
 pub use snapshot::{Capture, Variable, Snapshot, Value};
 
@@ -62,8 +60,8 @@ impl Rig for BashCap {
     /// The instrument reaches every shell through the address, which is why
     /// tracing lives here and not on the command line: `BASH_ENV` reaches a
     /// subject's children, its argv does not.
-    fn setup(&self) -> Setup {
-        Setup { label: LABEL.to_string(), bash: instrument(self.tracing) }
+    fn bash(&self) -> String {
+        instrument(self.tracing)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {

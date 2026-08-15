@@ -232,8 +232,8 @@ pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: us
 impl Rig for BashCap {
     type Reaction = Capturing;
 
-    fn setup(&self) -> Setup {
-        Setup { label: LABEL.to_string(), bash: instrument(self.tracing) }
+    fn bash(&self) -> String {
+        instrument(self.tracing)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
