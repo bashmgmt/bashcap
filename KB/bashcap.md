@@ -20,7 +20,7 @@ full stack, and no command line in between.
 
 ```
 bashcap run   [--reach bash-env|by-hand] --into FILE [--verbose] [--trace-calls] [--] <command…>
-bashcap serve --into FILE [--verbose] [--trace-calls]
+bashcap serve --at DIR --into FILE [--verbose] [--trace-calls]
 bashcap show FILE
 ```
 
@@ -30,7 +30,7 @@ from the same `Capture` struct — the symmetry is the code, not a convention:
 | | who starts the shells | how they are reached | its exit code |
 |---|---|---|---|
 | `run` | the tool, from the command line it was given | `BC_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
-| `serve` | a bash script, which started this process as a coprocess | the address, written on stdout for the client to source | its own: 0, or 1 if the capture did not come out |
+| `serve` | a bash script, which named the workspace (`--at`, required) and started this process as a coprocess | its own choice — the address is `<at>/session.bash`; the line on stdout says the session is laid | its own: 0, or 1 if the capture did not come out |
 
 `--verbose` goes to stderr in both, because under `serve` stdout is the channel
 the address goes out on. `--trace-calls` differs in degree rather than kind:
@@ -226,14 +226,14 @@ reaction was handed at construction. See [shell.md](shell.md).
 ```rust
 type Sink = Rc<RefCell<BufWriter<File>>>;
 
-pub struct BashCap   { into: PathBuf, sink: Sink, reaching: Reaching, tracing: Tracing }
+pub struct BashCap   { into: PathBuf, sink: Sink, tracing: Tracing }
 pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: usize }
 
 impl Rig for BashCap {
     type Reaction = Capturing;
 
     fn setup(&self) -> Setup {
-        Setup { bash: instrument(self.tracing), workspace: Workspace::Temporary }
+        Setup { label: LABEL.to_string(), bash: instrument(self.tracing) }
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
@@ -260,7 +260,8 @@ shell it was taken in, and this one had it before its first message could
 arrive.
 
 ```rust
-let ran = BashCap::writing(into, Reaching::BashEnv)?.run(argv).await?.whole()?;
+let bashcap = Reached { rig: BashCap::writing(into)?, reaching: Reaching::BashEnv };
+let ran = bashcap.run(argv).await?.whole()?;
 let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
 ```
 
@@ -335,12 +336,12 @@ process — and nothing asserts its line numbers, counts or variable names, so
 it is meant to be edited.
 
 Typical output is the block above. come from a subshell and a child process: the first reaches the wire by
-re-joining under its own `$BASHPID`, the second because the prelude runs there
-too, through `BASH_ENV`.
+re-joining under its own `$BASHPID`, the second because the invocation runs
+there too, through `BASH_ENV`.
 
 ## See also
 
-- [wire.md](wire.md#the-prelude) — how a rig's bash reaches every shell
+- [wire.md](wire.md#three-files) — how a rig's bash reaches every shell
 - [rig.md](rig.md) — the trait it implements
 - `tests/examples/snapshotting.rs` — its instrument, reused without its CLI
 - `src/bashcap/tests.rs` — its bash-level tests: one run covering every section

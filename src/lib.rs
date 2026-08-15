@@ -59,7 +59,7 @@ impl BashCap {
 impl Rig for BashCap {
     type Reaction = Capturing;
 
-    /// The instrument reaches every shell through the prelude, which is why
+    /// The instrument reaches every shell through the address, which is why
     /// tracing lives here and not on the command line: `BASH_ENV` reaches a
     /// subject's children, its argv does not.
     fn setup(&self) -> Setup {
