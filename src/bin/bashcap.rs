@@ -98,8 +98,8 @@ impl Capture {
 
     /// The exit code is the subject's, so a wrapped script is indistinguishable
     /// from an unwrapped one.
-    fn run(&self, argv: &[String]) -> Result<ExitStatus, Failure> {
-        let ran = self.tool()?.run(argv)?;
+    async fn run(&self, argv: &[String]) -> Result<ExitStatus, Failure> {
+        let ran = self.tool()?.run(argv).await?;
 
         self.tally(&ran.shells);
 
@@ -113,8 +113,8 @@ impl Capture {
 
     /// Nothing here starts a shell or ends one, so there is no subject's status
     /// to hand back — only whether the capture itself came out whole.
-    fn serve(&self) -> Result<(), Failure> {
-        let served = self.tool()?.serve_coprocess()?;
+    async fn serve(&self) -> Result<(), Failure> {
+        let served = self.tool()?.serve_coprocess().await?;
 
         self.tally(&served.shells);
 
@@ -122,9 +122,10 @@ impl Capture {
     }
 }
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let code = match Cli::try_parse() {
-        Ok(cli) => perform(&cli.what).unwrap_or_else(|error| {
+        Ok(cli) => perform(&cli.what).await.unwrap_or_else(|error| {
             eprintln!("bashcap: {error}");
             1
         }),
@@ -141,10 +142,10 @@ fn main() {
 
 /// The exit code the subcommand earned. Only `run_bash_env` has one of its own
 /// — it is the subject's — and everything that fails does so the same way.
-fn perform(what: &What) -> Result<i32, Failure> {
+async fn perform(what: &What) -> Result<i32, Failure> {
     match what {
-        What::RunBashEnv { capture, argv } => capture.run(argv).map(ExitStatus::shell_code),
-        What::Serve { capture } => capture.serve().map(|()| 0),
+        What::RunBashEnv { capture, argv } => capture.run(argv).await.map(ExitStatus::shell_code),
+        What::Serve { capture } => capture.serve().await.map(|()| 0),
         What::Show { from } => show(from).map(|()| 0),
     }
 }

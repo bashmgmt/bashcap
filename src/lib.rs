@@ -13,7 +13,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::bash::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell, Workspace,
+    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Setup, Shell,
+    Workspace,
 };
 
 pub use instrument::{instrument, Tracing};
@@ -58,18 +59,14 @@ impl BashCap {
 impl Rig for BashCap {
     type Reaction = Capturing;
 
-    /// bashcap's instrument reaches every shell through the prelude, which
-    /// is why tracing lives here and not in the command line: `BASH_ENV`
-    /// reaches a subject's children, its argv does not.
-    fn bash(&self) -> String {
-        instrument(self.tracing)
+    /// The instrument reaches every shell through the prelude, which is why
+    /// tracing lives here and not on the command line: `BASH_ENV` reaches a
+    /// subject's children, its argv does not.
+    fn setup(&self) -> Setup {
+        Setup { bash: instrument(self.tracing), workspace: Workspace::Temporary }
     }
 
-    fn workspace(&self) -> Workspace {
-        Workspace::Temporary
-    }
-
-    fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
+    async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
         Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }
 }
@@ -96,9 +93,9 @@ impl Reacting for Capturing {
     /// How many snapshots this shell wrote. What they said went to the file.
     type Kept = usize;
 
-    /// One JSON object per line, in arrival order. Each carries both clocks, so
-    /// ordering downstream is exact and is `sort`'s job.
-    fn hear(&mut self, said: Message) -> Result<(), Failure> {
+    /// One JSON object per line, as they arrive. Each carries both clocks, so
+    /// ordering downstream is `sort`'s job.
+    async fn hear(&mut self, said: Message) -> Result<(), Failure> {
         let at = || format!("a snapshot from pid {}", self.shell.pid);
 
         let Some(decoded) = Capture::of(&said, &self.shell) else {
@@ -114,8 +111,8 @@ impl Reacting for Capturing {
 
     /// bashcap only listens, so a shell that asks it something is told the word
     /// is unknown.
-    fn answer(&mut self, asked: Message) -> Result<Answer, Failure> {
-        self.hear(asked)?;
+    async fn answer(&mut self, asked: Message) -> Result<Answer, Failure> {
+        self.hear(asked).await?;
 
         Ok(Answer::unknown())
     }
@@ -123,7 +120,7 @@ impl Reacting for Capturing {
     /// A failed flush ends the run rather than being lost in a `Drop`. The sink
     /// outlives every reaction, so the last shell to finish is what puts the
     /// run's tail on disk.
-    fn finish(self) -> Result<usize, Failure> {
+    async fn finish(self) -> Result<usize, Failure> {
         self.sink.borrow_mut().flush().doing(|| self.writing())?;
 
         Ok(self.written)

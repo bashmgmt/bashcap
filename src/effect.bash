@@ -31,7 +31,7 @@ __bc_capture() {
         unset -n __bc_ref
     done
 
-    BC_INSTR say __BASHCAP__ \
+    BC_INSTR BASHCAP say __BASHCAP__ \
         "${__bc_walk[@]}" \
         state   "(${__bc_state[*]@Q})" \
         rematch "(${__bc_rematch[*]@Q})" \

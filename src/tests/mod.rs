@@ -17,7 +17,7 @@ mod writing;
 use std::sync::Arc;
 
 use crate::bash::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Shell, Workspace,
+    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Setup, Shell, Workspace,
 };
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
@@ -56,15 +56,11 @@ struct Decoded {
 impl Rig for Decoding {
     type Reaction = Decoded;
 
-    fn workspace(&self) -> Workspace {
-        Workspace::Temporary
+    fn setup(&self) -> Setup {
+        Setup { bash: instrument(Tracing::Off), workspace: Workspace::Temporary }
     }
 
-    fn bash(&self) -> String {
-        instrument(Tracing::Off)
-    }
-
-    fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {
+    async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {
         Ok(Decoded { shell, seen: Vec::new() })
     }
 }
@@ -72,7 +68,7 @@ impl Rig for Decoding {
 impl Reacting for Decoded {
     type Kept = Vec<Capture>;
 
-    fn hear(&mut self, said: Message) -> Result<(), Failure> {
+    async fn hear(&mut self, said: Message) -> Result<(), Failure> {
         let Some(capture) = Capture::of(&said, &self.shell) else {
             return Ok(());
         };
@@ -82,14 +78,13 @@ impl Reacting for Decoded {
         Ok(())
     }
 
-    /// It only listens, so a question is heard and the word reported unknown.
-    fn answer(&mut self, asked: Message) -> Result<Answer, Failure> {
-        self.hear(asked)?;
+    async fn answer(&mut self, asked: Message) -> Result<Answer, Failure> {
+        self.hear(asked).await?;
 
         Ok(Answer::unknown())
     }
 
-    fn finish(self) -> Result<Vec<Capture>, Failure> {
+    async fn finish(self) -> Result<Vec<Capture>, Failure> {
         Ok(self.seen)
     }
 }
@@ -97,9 +92,9 @@ impl Reacting for Decoded {
 impl Driving for Decoding {}
 
 /// Every snapshot a script produced, shell by shell in the order they joined.
-fn capture(body: &str) -> Vec<Capture> {
+async fn capture(body: &str) -> Vec<Capture> {
     let scripts = script(body);
-    let ran = Decoding.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
+    let ran = Decoding.run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
 
     ran.shells.into_iter().flat_map(|at| at.kept).collect()
 }

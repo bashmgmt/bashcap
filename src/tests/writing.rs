@@ -6,8 +6,8 @@ use crate::tests::scripts::bash;
 
 use super::{script, ENTRY};
 
-#[test]
-fn each_snapshot_is_written_as_it_arrives() {
+#[tokio::test]
+async fn each_snapshot_is_written_as_it_arrives() {
     let scripts = script(
         r#"
         BASHCAP -BCS:one
@@ -16,8 +16,13 @@ fn each_snapshot_is_written_as_it_arrives() {
     );
     let into = scripts.at("out.jsonl");
 
-    let ran =
-        BashCap::writing(&into).unwrap().run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
+    let ran = BashCap::writing(&into)
+        .unwrap()
+        .run(&bash(scripts.at(ENTRY)))
+        .await
+        .unwrap()
+        .whole()
+        .unwrap();
 
     assert_eq!(ran.shells.iter().map(|at| at.kept).sum::<usize>(), 2);
     assert_eq!(ran.subject, ExitStatus::Code(0));
@@ -39,8 +44,8 @@ fn each_snapshot_is_written_as_it_arrives() {
     assert_eq!(rows[1]["snapshot"]["notes"][0], "two");
 }
 
-#[test]
-fn a_written_capture_reads_back_whole() {
+#[tokio::test]
+async fn a_written_capture_reads_back_whole() {
     let scripts = script(
         r#"
         shopt -s extdebug
@@ -50,7 +55,7 @@ fn a_written_capture_reads_back_whole() {
     );
     let into = scripts.at("out.jsonl");
 
-    BashCap::writing(&into).unwrap().run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
+    BashCap::writing(&into).unwrap().run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
 
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 

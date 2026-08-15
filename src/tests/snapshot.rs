@@ -5,8 +5,8 @@ use crate::bashcap::Value;
 
 use super::capture;
 
-#[test]
-fn a_snapshot_carries_the_whole_shell_state() {
+#[tokio::test]
+async fn a_snapshot_carries_the_whole_shell_state() {
     let snaps = capture(
         r#"
         declare -- greeting="hello world"
@@ -26,7 +26,8 @@ fn a_snapshot_carries_the_whole_shell_state() {
         step() { echo "ran $*"; }
         WITH_BASHCAP -BCV:greeting -BCS:"before step" step one
         "#,
-    );
+    )
+    .await;
 
     assert_eq!(snaps.len(), 2);
 
@@ -63,23 +64,24 @@ fn a_snapshot_carries_the_whole_shell_state() {
     assert_eq!(wrapped.notes, ["before step"]);
 }
 
-#[test]
-fn a_variable_holding_a_byte_bash_cannot_show_survives_the_wire() {
+#[tokio::test]
+async fn a_variable_holding_a_byte_bash_cannot_show_survives_the_wire() {
     let snaps = capture(
         r#"
         high=$'\377'
         low=$'a\001b'
         BASHCAP -BCV:high -BCV:low
         "#,
-    );
+    )
+    .await;
 
     let vars = &snaps[0].snapshot.vars;
     assert_eq!(vars["high"].value, Value::Scalar("\u{ff}".into()));
     assert_eq!(vars["low"].value, Value::Scalar("a\u{1}b".into()));
 }
 
-#[test]
-fn the_walk_survives_the_subjects_own_shell_options() {
+#[tokio::test]
+async fn the_walk_survives_the_subjects_own_shell_options() {
     let snaps = capture(
         r#"
         set -euo pipefail
@@ -88,7 +90,8 @@ fn the_walk_survives_the_subjects_own_shell_options() {
         f
         BASHCAP -BCS:after
         "#,
-    );
+    )
+    .await;
 
     assert_eq!(snaps.len(), 2, "the script ran on past the first snapshot");
     assert_eq!(snaps[0].snapshot.stack.top().args, Some(Vec::new()), "f was called with none");

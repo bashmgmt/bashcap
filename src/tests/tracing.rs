@@ -9,21 +9,21 @@ use crate::tests::scripts::bash;
 
 use super::{capture, script, ENTRY};
 
-#[test]
-fn call_arguments_arrive_where_the_shell_was_recording_them() {
+#[tokio::test]
+async fn call_arguments_arrive_where_the_shell_was_recording_them() {
     let body = r#"
         deep() { BASHCAP -BCS:"at the bottom"; }
         mid()  { deep "d one" $'d\ntwo'; }
         mid "m one"
         "#;
 
-    let bare = capture(body);
+    let bare = capture(body).await;
     assert!(
         bare[0].snapshot.stack.frames().all(|frame| frame.args.is_none()),
         "an ordinary shell records none, and says so"
     );
 
-    let traced = capture(&format!("shopt -s extdebug\n{body}"));
+    let traced = capture(&format!("shopt -s extdebug\n{body}")).await;
     let called: Vec<&[String]> = traced[0]
         .snapshot
         .stack
@@ -43,8 +43,8 @@ fn call_arguments_arrive_where_the_shell_was_recording_them() {
     );
 }
 
-#[test]
-fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
+#[tokio::test]
+async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     let scripts = script(
         r#"
         outer() { BASHCAP -BCS:top; }
@@ -61,14 +61,14 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     )
     .unwrap();
 
-    let ran = |tool: BashCap, into: &Path| {
-        tool.run(&bash(scripts.at(ENTRY))).unwrap().whole().unwrap();
+    let ran = async |tool: BashCap, into: &Path| {
+        tool.run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
 
         captures(&std::fs::read_to_string(into).unwrap()).unwrap()
     };
 
     let plain = scripts.at("plain.jsonl");
-    let bare = ran(BashCap::writing(&plain).unwrap(), &plain);
+    let bare = ran(BashCap::writing(&plain).unwrap(), &plain).await;
     assert_eq!(bare.len(), 2, "one snapshot from each shell");
     assert!(
         bare.iter().flat_map(|seen| seen.snapshot.stack.frames()).all(|frame| frame.args.is_none()),
@@ -76,7 +76,7 @@ fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     );
 
     let full = scripts.at("traced.jsonl");
-    let traced = ran(BashCap::writing(&full).unwrap().tracing_calls(), &full);
+    let traced = ran(BashCap::writing(&full).unwrap().tracing_calls(), &full).await;
     let called: Vec<Vec<&[String]>> = traced
         .iter()
         .map(|seen| {

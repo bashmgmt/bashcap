@@ -33,11 +33,14 @@ pub enum Tracing {
     Calls,
 }
 
+/// The label bashcap's words speak under.
+const JOIN: &str = "BC_JOIN BASHCAP\n";
+
 /// The bash a rig hands the subject, for any rig that wants what bashcap
 /// harvests. The frame walk comes with it, since a snapshot reports one.
 pub fn instrument(tracing: Tracing) -> String {
     match tracing {
-        Tracing::Off => stack::with_walk(&[WORDS, EFFECT]),
-        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE]),
+        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, JOIN]),
+        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE, JOIN]),
     }
 }

@@ -41,8 +41,8 @@ impl fmt::Display for Capture {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "pid {} seq {} shlvl {} subshell {}",
-            self.shell.pid, self.stamp.seq, self.shell.shlvl, self.shell.subshell
+            "pid {} at {} shlvl {} subshell {}",
+            self.shell.pid, self.stamp.sent_at.0, self.shell.shlvl, self.shell.subshell
         )?;
 
         for frame in self.snapshot.stack.frames() {
