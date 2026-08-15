@@ -1,6 +1,6 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
-use crate::bash::rig::{Driving, ExitStatus, Reaching};
+use crate::bash::rig::{Driving, ExitStatus, Reached, Reaching};
 use crate::bashcap::{captures, BashCap};
 use crate::tests::scripts::bash;
 
@@ -16,13 +16,8 @@ async fn each_snapshot_is_written_as_it_arrives() {
     );
     let into = scripts.at("out.jsonl");
 
-    let ran = BashCap::writing(&into, Reaching::BashEnv)
-        .unwrap()
-        .run(&bash(scripts.at(ENTRY)))
-        .await
-        .unwrap()
-        .whole()
-        .unwrap();
+    let bashcap = Reached { rig: BashCap::writing(&into).unwrap(), reaching: Reaching::BashEnv };
+    let ran = bashcap.run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
 
     assert_eq!(ran.shells.iter().map(|at| at.kept).sum::<usize>(), 2);
     assert_eq!(ran.subject, ExitStatus::Code(0));
@@ -55,7 +50,8 @@ async fn a_written_capture_reads_back_whole() {
     );
     let into = scripts.at("out.jsonl");
 
-    BashCap::writing(&into, Reaching::BashEnv).unwrap().run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
+    let bashcap = Reached { rig: BashCap::writing(&into).unwrap(), reaching: Reaching::BashEnv };
+    bashcap.run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
 
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 

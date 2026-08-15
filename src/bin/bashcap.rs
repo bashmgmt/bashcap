@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand};
 
 use mb_resolver::bash::rig::{
-    Attended, Doing, Driving, ExitStatus, Failure, Reaching, Serving, JOINING,
+    Attended, Doing, Driving, ExitStatus, Failure, Reached, Reaching, Serving, JOINING,
 };
 use mb_resolver::bashcap::{captures, BashCap};
 
@@ -94,8 +94,8 @@ struct Capture {
 impl Capture {
     /// The tool this asks for. The file is opened here, so a path that cannot
     /// be written is known before any shell has run.
-    fn tool(&self, reaching: Reaching) -> Result<BashCap, Failure> {
-        let bashcap = BashCap::writing(&self.into, reaching)?;
+    fn tool(&self) -> Result<BashCap, Failure> {
+        let bashcap = BashCap::writing(&self.into)?;
 
         Ok(match self.trace_calls {
             true => bashcap.tracing_calls(),
@@ -116,7 +116,7 @@ impl Capture {
     /// The exit code is the subject's, so a wrapped script is indistinguishable
     /// from an unwrapped one.
     async fn run(&self, reaching: Reaching, argv: &[String]) -> Result<ExitStatus, Failure> {
-        let ran = self.tool(reaching)?.run(argv).await?;
+        let ran = Reached { rig: self.tool()?, reaching }.run(argv).await?;
 
         self.tally(&ran.shells);
 
@@ -129,10 +129,9 @@ impl Capture {
     }
 
     /// Nothing here starts a shell or ends one, so there is no subject's status
-    /// to hand back — only whether the capture itself came out whole. What the
-    /// address reaches is the client's: `Serving` reads no `Reaching`.
+    /// to hand back — only whether the capture itself came out whole.
     async fn serve(&self, at: &Path) -> Result<(), Failure> {
-        let served = self.tool(Reaching::ByHand)?.serve_coprocess(at).await?;
+        let served = self.tool()?.serve_coprocess(at).await?;
 
         self.tally(&served.shells);
 
