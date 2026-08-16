@@ -1,13 +1,6 @@
-# The words bashcap gives a script. This file is what the tool injects and what
-# a client vendors, so each word has one definition and only its effect exists
-# twice:
-#
-#     source lib/bashcap.bash
-#     declare -F __bc_capture >/dev/null || __bc_capture() { :; }
-#
-# Nothing here names the protocol. What a call does when the tool is present
-# lives behind __bc_capture, whose argument is how many leading frames of the
-# walk belong to the instrument — a number each word knows about itself.
+# The words bashcap gives a script. What a call does lives behind
+# __bc_capture, whose argument is how many leading frames of the walk belong
+# to the instrument — a number each word knows about itself.
 
 # Leading -BCV:/-BCS: flags off the front, into two arrays of the caller's.
 # Every consumed word lands in one of them, so their combined length is how far

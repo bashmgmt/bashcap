@@ -6,7 +6,7 @@ one subject per file:
 
 | | | |
 |---|---|---|
-| the instrument | `src/instrument.rs`, `assets/bashcap.bash`, `src/effect.bash`, `src/trace.bash` | the words, their effect, and the one function that composes them |
+| the instrument | `src/instrument.rs`, `src/words.bash`, `src/effect.bash`, `src/trace.bash` | the words, their effect, and the one function that composes them |
 | the record | `src/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
 | the rendering | `src/show.rs` | reading a written capture back, and the one `Display` of one |
 | the tool | `src/lib.rs` | a rig whose reactions share one sink, and the JSON line format it owns |
@@ -39,8 +39,8 @@ sourced into a shell that is already running — by hand, or under `serve` — i
 installs a `DEBUG` trap there, replacing one the client had. `run --help` and
 `serve --help` end with every way a script joins, in this tool's words.
 
-A client that only ever runs under `serve` vendors nothing at all: the
-words arrive with the laid files, so `BASHCAP` is defined from the moment
+A client vendors nothing: the words arrive with the laid files — or, under
+`run`, through `BASH_ENV` — so `BASHCAP` is defined from the moment
 `rig.bash` is sourced and joined from `BASHCAP_INIT`.
 
 `show` renders a capture through `Capture`'s `Display`, which is the same
@@ -61,9 +61,10 @@ named `BASHCAP__CTX__*` is captured automatically, which is how ambient
 context rides along without being named at each site. `WITH_BASHCAP` is the
 CPS form: it snapshots, runs the continuation, and returns *its* status.
 
-Keeping those call sites runnable without the tool is the client's own, and
-`assets/bashcap.bash` is what it vendors to do it — see
-`bash-interop/docs/vendoring.md`.
+A call site makes bashcap a dependency of the script that says it: outside
+a session the word is a missing command, loudly. A script that must also
+run without the tool defines the word itself, in one guarded line of its
+own.
 
 ## The instrument
 

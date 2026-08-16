@@ -17,13 +17,6 @@ mkdir -p "$WORK"
 hr "build"
 ( cd "$ROOT" && cargo build -p bashcap --bin bashcap ) || exit 1
 
-hr "the words (what a client script vendors, and how it guards it)"
-sed 's/^/   /' "$ROOT/assets/bashcap.bash"
-
-hr "the same fixture without the tool — the guard installs an empty hook"
-bash "$FIXTURE" >/dev/null
-printf '   exited %s\n' "$?"
-
 hr "run"
 "$BIN" run --into "$WORK/capture.jsonl" -- bash "$FIXTURE"
 printf '   the wrapped script exited %s\n' "$?"

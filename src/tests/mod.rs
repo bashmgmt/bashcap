@@ -7,11 +7,11 @@
 //! | [`snapshot`] | what one `BASHCAP` call reports, and what survives the wire |
 //! | [`tracing`] | call arguments: where the shell was recording, and the tool's own switch |
 //! | [`writing`] | the JSON line a run writes, and reading it back |
-//! | [`vendoring`] | the words a client ships, and what the instrument may not do to a shell |
+//! | [`shipped`] | what the injected bash may not do to a shell |
 
 mod snapshot;
 mod tracing;
-mod vendoring;
+mod shipped;
 mod writing;
 
 use std::sync::Arc;
@@ -19,28 +19,16 @@ use std::sync::Arc;
 use bash_interop::rig::{
     Answer, Doing, Driving, Failure, Layout, Message, Provision, Reacting, Rig, Shell,
 };
-use crate::instrument::WORDS;
+
 use crate::{instrument, Capture, Tracing};
 use bash_interop::scratch::{bash, Scripts};
 
-/// What a shipped script writes: strict options, the words beside it, and one
-/// line naming the hook rather than the words — so a client cannot displace the
-/// real ones whichever order the two arrive in.
-///
-/// `set -u` is the option that reaches furthest into the tool, every name the
-/// instrument reads having to be one it set. It leads because a client that
-/// joins a session of its own has it on before anything of the tool's is
-/// sourced at all.
-const VENDORING: &str = r#"
-    set -euo pipefail
-    source "$(dirname "${BASH_SOURCE[0]}")/bashcap.bash"
-    declare -F __bc_capture >/dev/null || __bc_capture() { :; }
-"#;
-
-/// A script vendoring the words as a shipped one would. What it sources is the
-/// file the tool injects, byte for byte.
+/// A subject script under the strict options a shipped one has — `set -u`
+/// is the option that reaches furthest into the tool, every name the
+/// instrument reads having to be one it set. The words arrive through the
+/// session, like any subject's.
 pub(super) fn script(body: &str) -> Scripts {
-    Scripts::of(&[("bashcap.bash", WORDS), (ENTRY, &format!("{VENDORING}{body}"))])
+    Scripts::of(&[(ENTRY, &format!("set -euo pipefail\n{body}"))])
 }
 
 /// Every script these tests build starts here.

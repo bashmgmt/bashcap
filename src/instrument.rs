@@ -1,16 +1,14 @@
 //! The bash bashcap injects into a subject's shells.
 //!
-//! Two halves. [`WORDS`] is what a call site says — the same file a client
-//! vendors, naming nothing of the protocol. [`EFFECT`] is what a call does,
-//! and needs both the protocol and the frame walk.
+//! Two halves. [`WORDS`] is what a call site says; [`EFFECT`] is what a
+//! call does, and needs both the protocol and the frame walk.
 
 use bash_interop::rig::Layout;
 use bash_interop::stack;
 use bash_strings::emit_scalar;
 
-/// `BASHCAP` and `WITH_BASHCAP`. Shipped as an asset so a client's copy and
-/// the injected one are the same bytes.
-pub(crate) const WORDS: &str = include_str!("../assets/bashcap.bash");
+/// `BASHCAP` and `WITH_BASHCAP`.
+pub(crate) const WORDS: &str = include_str!("words.bash");
 
 /// `__bc_capture`, which is what makes those words do anything.
 pub(crate) const EFFECT: &str = include_str!("effect.bash");

@@ -11,5 +11,4 @@ bashcap show  capture.jsonl
 ```
 
 `make demo` (or `dev-bin/bashcap-demo.bash`) walks the whole story. Built on
-[`bash-interop`](../bash-interop); the words a client vendors are
-`assets/bashcap.bash`, and the reference is [`docs/`](docs/README.md).
+[`bash-interop`](../bash-interop); the reference is [`docs/`](docs/README.md).

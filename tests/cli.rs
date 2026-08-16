@@ -130,9 +130,8 @@ fn help_says_how_a_script_joins() {
     }
 }
 
-/// A served session end to end, over the shipped binary: a script that
-/// starts bashcap for itself vendors nothing at all — `BASHCAP` is defined
-/// by the laid files.
+/// A served session end to end, over the shipped binary: a script starts
+/// bashcap for itself, and `BASHCAP` is defined by the laid files.
 #[test]
 fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
     let scripts = Scripts::of(&[(

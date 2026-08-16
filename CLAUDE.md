@@ -1,8 +1,7 @@
 # bashcap — working in this crate
 
 A thin user of `bash-interop`: the instrument (bash injected into every
-shell), the rig impl, the reading, and the `bashcap` binary. The words a client
-vendors are `assets/bashcap.bash`. Reference: `docs/bashcap.md`.
+shell), the rig impl, the reading, and the `bashcap` binary. Reference: `docs/bashcap.md`.
 
 ```bash
 cargo test --lib -- --test-threads=1
