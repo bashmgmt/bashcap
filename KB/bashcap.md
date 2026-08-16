@@ -260,8 +260,10 @@ shell it was taken in, and this one had it before its first message could
 arrive.
 
 ```rust
-let bashcap = Reached { rig: BashCap::writing(into)?, reaching: Reaching::BashEnv };
-let ran = bashcap.run(argv).await?.whole()?;
+let ran = BashCap::writing(into)?
+    .run(argv, |at| vec![at.bc_session(), at.bash_env()])
+    .await?
+    .whole()?;
 let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
 ```
 

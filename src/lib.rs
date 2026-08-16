@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::bash::rig::{Answer, Doing, Failure, Layout, Message, Reacting, Rig, Serving, Shell};
+use crate::bash::rig::{
+    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell,
+};
 
 pub use instrument::{instrument, Tracing};
 pub use show::captures;
@@ -125,11 +127,12 @@ impl Reacting for Capturing {
     }
 }
 
-/// Either orchestration — serve it, or drive it as
-/// [`Reached`](crate::bash::rig::Reached): the instrument is the same text,
-/// and what it harvests is the same either way.
+/// Either orchestration: the instrument is the same text, and what it
+/// harvests is the same either way.
 ///
 /// [`Tracing::Calls`] is the exception in degree: sourced through `BASH_ENV`
 /// it arms itself before the subject's first line, sourced into a running
 /// shell it installs a `DEBUG` trap there.
+impl Driving for BashCap {}
+
 impl Serving for BashCap {}

@@ -9,12 +9,13 @@
 //! take the same options, from the same type.
 
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use mb_resolver::bash::rig::{
-    Attended, Doing, Driving, ExitStatus, Failure, Reached, Reaching, Serving, JOINING,
+    Attended, Doing, Driving, ExitStatus, Failure, Layout, Serving, JOINING,
 };
 use mb_resolver::bashcap::{captures, BashCap};
 
@@ -37,8 +38,8 @@ enum What {
         /// How the shells find the instrument: bash-env has every
         /// non-interactive bash in the tree join as it starts; by-hand leaves
         /// it to the scripts, which join with `source "$BC_SESSION"`.
-        #[arg(long, value_enum, default_value_t = Reaching::BashEnv)]
-        reach: Reaching,
+        #[arg(long, value_enum, default_value_t = Reach::BashEnv)]
+        reach: Reach,
 
         /// The wrapped command, program included — `bash build.bash`, or
         /// `make test`, whose own shells join too. Everything from the first
@@ -68,6 +69,27 @@ enum What {
         /// The file to read: one JSON snapshot per line.
         from: PathBuf,
     },
+}
+
+/// How the subject's shells find the session — this tool's vocabulary,
+/// mapped onto the run's environment closure.
+#[derive(Copy, Clone, ValueEnum)]
+enum Reach {
+    /// BC_SESSION and BASH_ENV name the address: every non-interactive bash
+    /// in the tree joins as it starts.
+    BashEnv,
+
+    /// BC_SESSION alone: a script joins where it says `source "$BC_SESSION"`.
+    ByHand,
+}
+
+impl Reach {
+    fn environment(self, at: &Layout) -> Vec<(OsString, OsString)> {
+        match self {
+            Self::BashEnv => vec![at.bc_session(), at.bash_env()],
+            Self::ByHand => vec![at.bc_session()],
+        }
+    }
 }
 
 /// What to capture and where to put it — the same question in both roles.
@@ -115,8 +137,8 @@ impl Capture {
 
     /// The exit code is the subject's, so a wrapped script is indistinguishable
     /// from an unwrapped one.
-    async fn run(&self, reaching: Reaching, argv: &[String]) -> Result<ExitStatus, Failure> {
-        let ran = Reached { rig: self.tool()?, reaching }.run(argv).await?;
+    async fn run(&self, reach: Reach, argv: &[String]) -> Result<ExitStatus, Failure> {
+        let ran = self.tool()?.run(argv, |at| reach.environment(at)).await?;
 
         self.tally(&ran.shells);
 

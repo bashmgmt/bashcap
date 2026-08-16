@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use crate::bash::rig::{Driving, Reached, Reaching};
+use crate::bash::rig::{Driving};
 use crate::bashcap::{captures, BashCap};
 use crate::tests::scripts::bash;
 
@@ -62,8 +62,7 @@ async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     .unwrap();
 
     let ran = async |tool: BashCap, into: &Path| {
-        Reached { rig: tool, reaching: Reaching::BashEnv }
-            .run(&bash(scripts.at(ENTRY)))
+        tool.run(&bash(scripts.at(ENTRY)), |at| vec![at.bash_env()])
             .await
             .unwrap()
             .whole()

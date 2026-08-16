@@ -17,7 +17,7 @@ mod writing;
 use std::sync::Arc;
 
 use crate::bash::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reached, Reaching, Reacting, Rig, Shell,
+    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Shell,
 };
 use crate::bashcap::instrument::WORDS;
 use crate::bashcap::{instrument, Capture, Tracing};
@@ -89,11 +89,17 @@ impl Reacting for Decoded {
     }
 }
 
+impl Driving for Decoding {}
+
 /// Every snapshot a script produced, shell by shell in the order they joined.
 async fn capture(body: &str) -> Vec<Capture> {
     let scripts = script(body);
-    let decoding = Reached { rig: Decoding, reaching: Reaching::BashEnv };
-    let ran = decoding.run(&bash(scripts.at(ENTRY))).await.unwrap().whole().unwrap();
+    let ran = Decoding
+        .run(&bash(scripts.at(ENTRY)), |at| vec![at.bash_env()])
+        .await
+        .unwrap()
+        .whole()
+        .unwrap();
 
     ran.shells.into_iter().flat_map(|at| at.kept).collect()
 }
