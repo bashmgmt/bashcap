@@ -31,9 +31,11 @@ use bash_interop::scratch::{bash, Scripts};
 /// instrument reads having to be one it set. It leads because a client that
 /// joins a session of its own has it on before anything of the tool's is
 /// sourced at all.
-const VENDORING: &str = "set -euo pipefail\n\
-                         source \"$(dirname \"${BASH_SOURCE[0]}\")/bashcap.bash\"\n\
-                         declare -F __bc_capture >/dev/null || __bc_capture() { :; }\n";
+const VENDORING: &str = r#"
+    set -euo pipefail
+    source "$(dirname "${BASH_SOURCE[0]}")/bashcap.bash"
+    declare -F __bc_capture >/dev/null || __bc_capture() { :; }
+"#;
 
 /// A script vendoring the words as a shipped one would. What it sources is the
 /// file the tool injects, byte for byte.

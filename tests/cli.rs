@@ -27,10 +27,11 @@ fn the_vendored_joining_is_the_cores_own() {
 /// unchanged, and it never runs `shopt` itself.
 #[test]
 fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
-    // Line 1 of the script is where `BASHCAP` fires, line 3 where `step` was called.
+    // Line 2 of the script is where `BASHCAP` fires, line 4 where `step` was called.
     let scripts = Scripts::of(&[(
         "build.bash",
-        r#"step() { BASHCAP -BCS:"one step"; }
+        r#"
+        step() { BASHCAP -BCS:"one step"; }
 
         step 'a target' --flag
         exit 7
@@ -53,8 +54,8 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
 
     assert!(text.contains("1 snapshots from 1 shells"), "{text}");
     assert!(
-        text.contains("step@build.bash:1 ('a target' '--flag')")
-            && text.contains("main@build.bash:3 ()"),
+        text.contains("step@build.bash:2 ('a target' '--flag')")
+            && text.contains("main@build.bash:4 ()"),
         "each frame carries its own call site and the arguments it was passed: {text}"
     );
     assert!(text.contains("note  one step"), "{text}");
@@ -66,7 +67,8 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
 fn without_the_switch_nothing_is_traced() {
     let scripts = Scripts::of(&[(
         "build.bash",
-        r#"step() { BASHCAP; }
+        r#"
+        step() { BASHCAP; }
 
         step 'a target'
         "#,
@@ -85,7 +87,7 @@ fn without_the_switch_nothing_is_traced() {
     let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
     let text = String::from_utf8(shown.stdout).unwrap();
 
-    assert!(text.contains("step@build.bash:1\n"), "the call site alone: {text}");
+    assert!(text.contains("step@build.bash:2\n"), "the call site alone: {text}");
     assert!(!text.contains("a target"), "no arguments were recorded to report: {text}");
 }
 
@@ -96,7 +98,8 @@ fn without_the_switch_nothing_is_traced() {
 fn reach_by_hand_leaves_joining_to_the_script() {
     let scripts = Scripts::of(&[(
         "build.bash",
-        r#"bash -c 'type BASHCAP >/dev/null 2>&1 && echo "joined without asking" >&2'
+        r#"
+        bash -c 'type BASHCAP >/dev/null 2>&1 && echo "joined without asking" >&2'
         source "$BC_SESSION/session.bash"
         BASHCAP -BCS:"by hand"
         "#,
@@ -142,7 +145,8 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
         ("lib/joining.bash", VENDORED_JOINING),
         (
             "work.bash",
-            r#"set -euo pipefail
+            r#"
+            set -euo pipefail
             source "${BASH_SOURCE[0]%/*}/lib/joining.bash"
             at="$1"; shift
             mkdir -p "$at"
@@ -178,6 +182,6 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
     let text = String::from_utf8(shown.stdout).unwrap();
 
     assert!(text.contains("2 snapshots from 2 shells"), "the subshell is one of its own: {text}");
-    assert!(text.contains("step@work.bash:9 ('a target')"), "--trace-calls reached it: {text}");
+    assert!(text.contains("step@work.bash:10 ('a target')"), "--trace-calls reached it: {text}");
     assert!(text.contains("note  from a subshell"), "{text}");
 }
