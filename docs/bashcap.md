@@ -325,7 +325,7 @@ that calls `run`. Four properties of a transparent wrapper:
 ## Playground
 
 ```sh
-make bashcap-demo [SCRIPT=path/to/your.bash]
+make demo [SCRIPT=path/to/your.bash]        # in this crate; make bash-demo at the workspace
 ```
 
 Builds the debug binary, shows the words, runs `__fixtures/bashcap_demo/demo.bash` once with no tool and once
