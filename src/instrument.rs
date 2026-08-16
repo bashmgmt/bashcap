@@ -35,16 +35,32 @@ pub enum Tracing {
     Calls,
 }
 
-/// The bash a rig hands the subject, for any rig that wants what bashcap
-/// harvests, generated against the settled workspace: the words speak under
-/// `BASHCAP`, and the join carries the coordinate baked in, quoted. The
-/// frame walk comes with it, since a snapshot reports one. The join comes
-/// before the trace: `TRACE` arms itself from the next command, which must
-/// be the subject's, not the join.
-pub fn instrument(at: &Layout, tracing: Tracing) -> String {
-    let join = format!("BC_JOIN BASHCAP {}\n", emit_scalar(at.text()));
+/// The definitions a rig hands the subject, for any rig that wants what
+/// bashcap harvests: the words speak under `BASHCAP`, the frame walk comes
+/// with them since a snapshot reports one, and `BASHCAP_INIT <dir>` is the
+/// channel setup on offer — defined here, called by nothing here. Under
+/// [`Tracing::Calls`] the init also arms the trace, after the join: arming
+/// hooks the next command, which must be the subject's.
+pub fn instrument(tracing: Tracing) -> String {
+    const INIT: &str = r#"
+BASHCAP_INIT() {
+    BC_JOIN BASHCAP "${1:?the session workspace}" || return
+}
+"#;
+    const INIT_TRACING: &str = r#"
+BASHCAP_INIT() {
+    BC_JOIN BASHCAP "${1:?the session workspace}" || return
+    trap '__bc_arm' DEBUG
+}
+"#;
     match tracing {
-        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, &join]),
-        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, &join, TRACE]),
+        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, INIT]),
+        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE, INIT_TRACING]),
     }
+}
+
+/// The standard initiation: `BASHCAP_INIT '<dir>'`. Data — written into a
+/// provisioned `bash_env.bash`, or said by a client's own line.
+pub fn joining(at: &Layout) -> String {
+    format!("BASHCAP_INIT {}\n", emit_scalar(at.text()))
 }

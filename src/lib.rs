@@ -16,7 +16,7 @@ use bash_interop::rig::{
     Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell,
 };
 
-pub use instrument::{instrument, Tracing};
+pub use instrument::{instrument, joining, Tracing};
 pub use show::captures;
 pub use snapshot::{Capture, Variable, Snapshot, Value};
 
@@ -59,11 +59,15 @@ impl BashCap {
 impl Rig for BashCap {
     type Reaction = Capturing;
 
-    /// The instrument reaches every shell through the address, which is why
-    /// tracing lives here and not on the command line: `BASH_ENV` reaches a
-    /// subject's children, its argv does not.
-    fn bash(&self, at: &Layout) -> String {
-        instrument(at, self.tracing)
+    /// The instrument reaches every shell that joins, which is why tracing
+    /// lives here and not on the command line: what a provisioned file or a
+    /// client's init call brings must be the same everywhere.
+    fn bash(&self, _at: &Layout) -> String {
+        instrument(self.tracing)
+    }
+
+    fn joining(&self, at: &Layout) -> String {
+        joining(at)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {

@@ -91,16 +91,19 @@ fn without_the_switch_nothing_is_traced() {
     assert!(!text.contains("a target"), "no arguments were recorded to report: {text}");
 }
 
-/// `--reach by-hand` exports the workspace and nothing else: the script
-/// joins where it says `source "$BC_SESSION/session.bash"`, and a shell it
-/// started before that is not a shell of the run.
+/// `--reach by-hand` provisions a definitions file and the workspace: every
+/// shell has the words, and none is a shell of the run until it initiates —
+/// the script where it says `BASHCAP_INIT "$BC_SESSION"`; a child that
+/// never does is only ever complained at.
 #[test]
 fn reach_by_hand_leaves_joining_to_the_script() {
     let scripts = Scripts::of(&[(
         "build.bash",
         r#"
-        bash -c 'type BASHCAP >/dev/null 2>&1 && echo "joined without asking" >&2'
-        source "$BC_SESSION/session.bash"
+        declare -- workspace="${BC_SESSION:?the workspace, from the tool}"
+
+        bash -c 'BASHCAP -BCS:"never joined" 2>/dev/null || true'
+        BASHCAP_INIT "$workspace"
         BASHCAP -BCS:"by hand"
         "#,
     )]);
@@ -121,6 +124,7 @@ fn reach_by_hand_leaves_joining_to_the_script() {
 
     assert!(text.contains("1 snapshots from 1 shells"), "{text}");
     assert!(text.contains("note  by hand"), "{text}");
+    assert!(!text.contains("never joined"), "the child had the words, not the channel: {text}");
 }
 
 /// Both session-opening verbs tell a script how to join, under `--help`.
@@ -130,9 +134,9 @@ fn help_says_how_a_script_joins() {
         let help = Command::new(BASHCAP).args([verb, "--help"]).output().expect("--help");
         let text = String::from_utf8(help.stdout).unwrap();
 
-        assert!(text.contains(r#"source "$BC_SESSION/session.bash""#), "{verb} --help:\n{text}");
+        assert!(text.contains(r#"BASHPROF_INIT "$BC_SESSION""#), "{verb} --help:\n{text}");
         assert!(text.contains("BC_START"), "{verb} --help:\n{text}");
-        assert!(text.contains("BC_ATTACH"), "{verb} --help:\n{text}");
+        assert!(text.contains("BC_LOAD"), "{verb} --help:\n{text}");
     }
 }
 
@@ -148,11 +152,12 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
             r#"
             set -euo pipefail
             source "${BASH_SOURCE[0]%/*}/lib/joining.bash"
-            at="$1"; shift
-            mkdir -p "$at"
+            declare -- workspace="${1:?the session workspace}"; shift
+            mkdir -p "$workspace"
             BC_START "$@"
-            until BC_UP "$at"; do sleep 0.01; done
-            BC_ATTACH "$at"
+            until BC_UP "$workspace"; do sleep 0.01; done
+            BC_LOAD "$workspace"
+            BASHCAP_INIT "$workspace"
 
             step() { BASHCAP -BCS:"in a served shell"; }
             step 'a target'
@@ -182,6 +187,6 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
     let text = String::from_utf8(shown.stdout).unwrap();
 
     assert!(text.contains("2 snapshots from 2 shells"), "the subshell is one of its own: {text}");
-    assert!(text.contains("step@work.bash:10 ('a target')"), "--trace-calls reached it: {text}");
+    assert!(text.contains("step@work.bash:11 ('a target')"), "--trace-calls reached it: {text}");
     assert!(text.contains("note  from a subshell"), "{text}");
 }

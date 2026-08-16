@@ -17,7 +17,7 @@ mod writing;
 use std::sync::Arc;
 
 use bash_interop::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Shell,
+    Answer, Doing, Driving, Failure, Layout, Message, Provision, Reacting, Rig, Shell,
 };
 use crate::instrument::WORDS;
 use crate::{instrument, Capture, Tracing};
@@ -58,8 +58,12 @@ struct Decoded {
 impl Rig for Decoding {
     type Reaction = Decoded;
 
-    fn bash(&self, at: &Layout) -> String {
-        instrument(at, Tracing::Off)
+    fn bash(&self, _at: &Layout) -> String {
+        instrument(Tracing::Off)
+    }
+
+    fn joining(&self, at: &Layout) -> String {
+        crate::joining(at)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {
@@ -97,7 +101,7 @@ impl Driving for Decoding {}
 async fn capture(body: &str) -> Vec<Capture> {
     let scripts = script(body);
     let ran = Decoding
-        .run(&bash(scripts.at(ENTRY)), |at| vec![at.bash_env()])
+        .run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
         .await
         .unwrap()
         .whole()

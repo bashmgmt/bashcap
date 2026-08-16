@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use bash_interop::rig::{Driving};
+use bash_interop::rig::{Driving, Provision};
 use crate::{captures, BashCap};
 use bash_interop::scratch::bash;
 
@@ -62,7 +62,7 @@ async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     .unwrap();
 
     let ran = async |tool: BashCap, into: &Path| {
-        tool.run(&bash(scripts.at(ENTRY)), |at| vec![at.bash_env()])
+        tool.run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
             .await
             .unwrap()
             .whole()

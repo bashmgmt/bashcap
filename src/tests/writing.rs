@@ -1,6 +1,6 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
-use bash_interop::rig::{Driving, ExitStatus};
+use bash_interop::rig::{Driving, ExitStatus, Provision};
 use crate::{captures, BashCap};
 use bash_interop::scratch::bash;
 
@@ -18,7 +18,7 @@ async fn each_snapshot_is_written_as_it_arrives() {
 
     let ran = BashCap::writing(&into)
         .unwrap()
-        .run(&bash(scripts.at(ENTRY)), |at| vec![at.bash_env()])
+        .run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
         .await
         .unwrap()
         .whole()
@@ -57,7 +57,7 @@ async fn a_written_capture_reads_back_whole() {
 
     BashCap::writing(&into)
         .unwrap()
-        .run(&bash(scripts.at(ENTRY)), |at| vec![at.bash_env()])
+        .run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
         .await
         .unwrap()
         .whole()
