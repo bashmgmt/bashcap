@@ -6,17 +6,18 @@ one subject per file:
 
 | | | |
 |---|---|---|
-| the instrument | `bashcap/instrument.rs`, `assets/bashcap.bash`, `bashcap/effect.bash`, `trace.bash` | the words, their effect, and the one function that composes them |
-| the record | `bashcap/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
-| the rendering | `bashcap/show.rs` | reading a written capture back, and the one `Display` of one |
-| the tool | `bashcap/mod.rs` | a rig whose reactions share one sink, and the JSON line format it owns |
+| the instrument | `src/instrument.rs`, `assets/bashcap.bash`, `src/effect.bash`, `src/trace.bash` | the words, their effect, and the one function that composes them |
+| the record | `src/snapshot.rs` | what a shell sends back, and the decoder that reads one off the wire |
+| the rendering | `src/show.rs` | reading a written capture back, and the one `Display` of one |
+| the tool | `src/lib.rs` | a rig whose reactions share one sink, and the JSON line format it owns |
 | the program | `src/bin/bashcap.rs` | `clap` and `main` |
 
 `instrument` and `Capture::of` are the pair another tool reuses: the bash that
 produces a snapshot, and the code that reads one back.
-`tests/examples/snapshotting.rs` is that reuse — bashcap expressed in the
-core, with typed captures for a session, `instrument(Tracing::Calls)` for the
-full stack, and no command line in between.
+`bash-interop-examples`' `snapshotting.rs` is that reuse — bashcap
+expressed in the core, with typed captures for a session,
+`instrument(Tracing::Calls)` for the full stack, and no command line in
+between.
 
 ```
 bashcap run   [--reach bash-env|by-hand] --into FILE [--verbose] [--trace-calls] [--] <command…>
@@ -29,14 +30,14 @@ from the same `Capture` struct — the symmetry is the code, not a convention:
 
 | | who starts the shells | how they are reached | its exit code |
 |---|---|---|---|
-| `run` | the tool, from the command line it was given | `BC_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
+| `run` | the tool, from the command line it was given | `BASHCAP_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
 | `serve` | a bash script, which named and made the workspace (`--at`, required, existing) and started this process as a coprocess | its own choice — the workspace is the address; the join fifo in it says the session is up, and the script sources the laid files and initiates by the same dir (`BASHCAP_INIT`) | its own: 0, or 1 if the capture did not come out |
 
 `--verbose` goes to stderr in both roles; stdout stays the subject's own. `--trace-calls` differs in degree rather than kind:
 sourced through `BASH_ENV` it arms itself before the subject's first line,
 sourced into a shell that is already running — by hand, or under `serve` — it
 installs a `DEBUG` trap there, replacing one the client had. `run --help` and
-`serve --help` end with `JOINING`, every way a script joins.
+`serve --help` end with every way a script joins, in this tool's words.
 
 A client that only ever runs under `serve` vendors nothing at all: the
 words arrive with the laid files, so `BASHCAP` is defined from the moment
@@ -121,12 +122,6 @@ pub enum Tracing { Off, Calls }
 /// The bash a rig hands the subject, for any rig that wants what bashcap
 /// harvests. One way to compose it; `BASH` and `TRACE` are not public.
 pub fn instrument(tracing: Tracing) -> String;
-
-pub struct Capture {
-    pub stamp: Stamp,
-    pub shell: Bash,      // what the shell said of itself when it joined
-    pub snapshot: Snapshot,
-}
 
 pub struct Snapshot {
     pub stack: Stack,
@@ -232,9 +227,11 @@ pub struct Capturing { shell: Arc<Shell>, into: PathBuf, sink: Sink, written: us
 impl Rig for BashCap {
     type Reaction = Capturing;
 
-    fn bash(&self) -> String {
+    fn bash(&self, _at: &Layout) -> String {
         instrument(self.tracing)
     }
+
+    fn joining(&self, at: &Layout) -> String { /* BASHCAP_INIT, as data */ }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
         Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
@@ -261,7 +258,9 @@ arrive.
 
 ```rust
 let ran = BashCap::writing(into)?
-    .run(argv, |at| vec![at.bc_session(), at.bash_env()])
+    .run(&argv, |at| {
+        Ok(vec![session(at), at.bash_env(Provision::Joining(&joining(at)))?])
+    })
     .await?
     .whole()?;
 let written: usize = ran.shells.iter().map(|shell| shell.kept).sum();
@@ -336,13 +335,14 @@ exercises every facility in one file — typed variables, ambient context,
 process — and nothing asserts its line numbers, counts or variable names, so
 it is meant to be edited.
 
-Typical output is the block above. come from a subshell and a child process: the first reaches the wire by
-re-joining under its own `$BASHPID`, the second because the invocation runs
-there too, through `BASH_ENV`.
+Typical output is the block above; its last two captures come from a
+subshell and a child process — the first reaches the wire by re-joining
+under its own `$BASHPID`, the second because the invocation runs there
+too, through `BASH_ENV`.
 
 ## See also
 
 - `bash-interop/docs/wire.md` — how a rig's bash reaches every shell
 - `bash-interop/docs/rigs.md` — the trait it implements
-- `tests/examples/snapshotting.rs` — its instrument, reused without its CLI
-- `src/bashcap/tests.rs` — its bash-level tests: one run covering every section
+- `bash-interop-examples`' `snapshotting.rs` — its instrument, reused without its CLI
+- `src/tests/` — its bash-level tests: one run covering every section

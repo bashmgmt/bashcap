@@ -1,0 +1,38 @@
+# The address of a session is its workspace directory. Loading its two laid
+# files defines the words; initiation is the client's own line. A shell under
+# a driven run with `--reach bash-env` needs neither — the provisioned
+# startup file did both — and under `--reach by-hand` finds the workspace in
+# BASHCAP_SESSION and joins where its script says so:
+source "$BASHCAP_SESSION/prelude.bash"
+source "$BASHCAP_SESSION/rig.bash"
+BASHCAP_INIT "$BASHCAP_SESSION"
+
+# A script that starts the tool itself, as a coprocess: it names and makes
+# the workspace, probes the same directory until the session is up — the
+# join fifo is present exactly while one serves — loads, initiates, and
+# holds the session open for as long as it keeps the handle coproc left it:
+declare -- workspace="$PWD/cap.d"              # an address is absolute
+mkdir -p "$workspace"
+coproc SERVER { bashcap serve --at "$workspace" --into capture.jsonl; }
+until [[ -p "$workspace/join" ]]; do sleep 0.01; done
+source "$workspace/prelude.bash"
+source "$workspace/rig.bash"
+BASHCAP_INIT "$workspace"
+
+# Letting go is closing that handle — the write end of the server's stdin —
+# and the wait returns the server's status, its capture written by then:
+declare -- handle="${SERVER[1]}"
+exec {handle}>&-
+wait "$SERVER_PID"
+
+# Only if there is a session — a script that runs the same with or without one:
+if [[ -n ${BASHCAP_SESSION-} ]]; then
+    source "$BASHCAP_SESSION/prelude.bash"
+    source "$BASHCAP_SESSION/rig.bash"
+    BASHCAP_INIT "$BASHCAP_SESSION"
+fi
+
+# The words a client vendors, and the polyfill for when nothing is listening —
+# after the load, so a session's own hooks win:
+source lib/bashcap.bash
+declare -F __bc_capture >/dev/null || __bc_capture() { :; }

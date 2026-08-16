@@ -15,9 +15,13 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 use bash_interop::rig::{
-    Attended, Doing, Driving, ExitStatus, Failure, Layout, Provision, Serving, JOINING,
+    Attended, Doing, Driving, ExitStatus, Failure, Layout, Provision, Serving,
 };
 use bashcap::{captures, BashCap};
+
+/// Every way a script joins this tool's sessions, in this tool's words —
+/// appended to the session-opening verbs' `--help`.
+const JOINING: &str = include_str!("joining.txt");
 
 #[derive(Parser)]
 #[command(name = "bashcap", about = "Capture bash shell state at every BASHCAP call site")]
@@ -29,7 +33,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum What {
     /// Run a command line under capture. Every shell finds the session's
-    /// workspace in BC_SESSION; --reach says whether it has already joined.
+    /// workspace in BASHCAP_SESSION; --reach says whether it has
+    /// already joined.
     #[command(after_long_help = JOINING)]
     Run {
         #[command(flatten)]
@@ -38,7 +43,7 @@ enum What {
         /// How the shells find the instrument: bash-env has every
         /// non-interactive bash in the tree join as it starts; by-hand
         /// leaves initiation to the scripts, which join with
-        /// `BASHCAP_INIT "$BC_SESSION"`.
+        /// `BASHCAP_INIT "$BASHCAP_SESSION"`.
         #[arg(long, value_enum, default_value_t = Reach::BashEnv)]
         reach: Reach,
 
@@ -74,25 +79,25 @@ enum What {
 }
 
 /// How the subject's shells find the session — this tool's vocabulary,
-/// mapped onto the run's environment closure. `BC_SESSION` carries the
+/// mapped onto the run's environment closure. `BASHCAP_SESSION` carries the
 /// workspace directory: the tools' own convention, spelled here, consulted
 /// by nothing in the core.
 #[derive(Copy, Clone, ValueEnum)]
 enum Reach {
-    /// BC_SESSION carries the workspace and BASH_ENV a provisioned file
+    /// BASHCAP_SESSION carries the workspace and BASH_ENV a provisioned file
     /// that initiates: every non-interactive bash in the tree joins as it
     /// starts.
     BashEnv,
 
-    /// The provisioned file only defines, and BC_SESSION carries the
+    /// The provisioned file only defines, and BASHCAP_SESSION carries the
     /// workspace: a script joins where it says
-    /// `BASHCAP_INIT "$BC_SESSION"`.
+    /// `BASHCAP_INIT "$BASHCAP_SESSION"`.
     ByHand,
 }
 
 impl Reach {
     fn environment(self, at: &Layout) -> Result<Vec<(OsString, OsString)>, Failure> {
-        let session = (OsString::from("BC_SESSION"), OsString::from(at.text()));
+        let session = (OsString::from("BASHCAP_SESSION"), OsString::from(at.text()));
         Ok(match self {
             Self::BashEnv => {
                 vec![session, at.bash_env(Provision::Joining(&bashcap::joining(at)))?]

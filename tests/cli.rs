@@ -83,14 +83,14 @@ fn without_the_switch_nothing_is_traced() {
 
 /// `--reach by-hand` provisions a definitions file and the workspace: every
 /// shell has the words, and none is a shell of the run until it initiates —
-/// the script where it says `BASHCAP_INIT "$BC_SESSION"`; a child that
+/// the script where it says `BASHCAP_INIT "$BASHCAP_SESSION"`; a child that
 /// never does is only ever complained at.
 #[test]
 fn reach_by_hand_leaves_joining_to_the_script() {
     let scripts = Scripts::of(&[(
         "build.bash",
         r#"
-        declare -- workspace="${BC_SESSION:?the workspace, from the tool}"
+        declare -- workspace="${BASHCAP_SESSION:?the workspace, from the tool}"
 
         bash -c 'BASHCAP -BCS:"never joined" 2>/dev/null || true'
         BASHCAP_INIT "$workspace"
@@ -124,7 +124,7 @@ fn help_says_how_a_script_joins() {
         let help = Command::new(BASHCAP).args([verb, "--help"]).output().expect("--help");
         let text = String::from_utf8(help.stdout).unwrap();
 
-        assert!(text.contains(r#"BASHPROF_INIT "$BC_SESSION""#), "{verb} --help:\n{text}");
+        assert!(text.contains(r#"BASHCAP_INIT "$BASHCAP_SESSION""#), "{verb} --help:\n{text}");
         assert!(text.contains("coproc SERVER"), "{verb} --help:\n{text}");
         assert!(text.contains(r#"source "$workspace/prelude.bash""#), "{verb} --help:\n{text}");
     }
