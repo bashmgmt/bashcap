@@ -4,11 +4,11 @@
 //! vendors, naming nothing of the protocol. [`EFFECT`] is what a call does,
 //! and needs both the protocol and the frame walk.
 
-use crate::bash::stack;
+use bash_interop::stack;
 
 /// `BASHCAP` and `WITH_BASHCAP`. Shipped as an asset so a client's copy and
 /// the injected one are the same bytes.
-pub(crate) const WORDS: &str = include_str!("../../assets/bashcap.bash");
+pub(crate) const WORDS: &str = include_str!("../assets/bashcap.bash");
 
 /// `__bc_capture`, which is what makes those words do anything.
 pub(crate) const EFFECT: &str = include_str!("effect.bash");
@@ -24,11 +24,11 @@ pub enum Tracing {
     Off,
 
     /// Every frame comes back with the arguments its call was made with —
-    /// see [`Frame::args`](crate::bash::stack::Frame::args).
+    /// see [`Frame::args`](bash_interop::stack::Frame::args).
     ///
     /// Sourced through `BASH_ENV`, this arms itself before the subject's first
     /// line. Sourced into a shell that is already running — by hand, or under
-    /// [`Serving`](crate::bash::rig::Serving) — it installs a `DEBUG` trap
+    /// [`Serving`](bash_interop::rig::Serving) — it installs a `DEBUG` trap
     /// there, replacing one the client had.
     Calls,
 }

@@ -1,7 +1,7 @@
 //! What one `BASHCAP` call reports: the frames it was made on, the
 //! variables it named, and what a value survives on the way here.
 
-use crate::bashcap::Value;
+use crate::Value;
 
 use super::capture;
 

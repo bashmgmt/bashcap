@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use crate::bash::rig::{Driving};
-use crate::bashcap::{captures, BashCap};
-use crate::tests::scripts::bash;
+use bash_interop::rig::{Driving};
+use crate::{captures, BashCap};
+use bash_interop::scratch::bash;
 
 use super::{capture, script, ENTRY};
 

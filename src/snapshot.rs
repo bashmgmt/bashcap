@@ -6,9 +6,9 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::bash::rig::{field, Doing, Failure, Message, Shell, Stamp};
-use crate::bash::stack::{Columns, Stack};
-use crate::bash::value::{parse_array, parse_assoc, parse_indexed, parse_scalar};
+use bash_interop::rig::{field, Doing, Failure, Message, Shell, Stamp};
+use bash_interop::stack::{Columns, Stack};
+use bash_strings::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
 /// The word every snapshot message begins with, and the one thing that tells
 /// bashcap's messages from any other tool's on the same wire.

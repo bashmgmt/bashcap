@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::bash::rig::{
+use bash_interop::rig::{
     Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell,
 };
 

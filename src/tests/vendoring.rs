@@ -1,9 +1,8 @@
 //! What a client ships: the words, the guard that decides whether they do
 //! anything, and the contract the instrument keeps towards a shell it reaches.
 
-use crate::bash;
-use crate::bash::stack;
-use crate::bashcap::instrument::{EFFECT, TRACE, WORDS};
+use bash_interop::stack;
+use crate::instrument::{EFFECT, TRACE, WORDS};
 
 use super::{script, ENTRY};
 
@@ -30,7 +29,7 @@ fn the_vendored_words_carry_a_call_site_without_the_tool() {
 #[test]
 fn the_words_name_nothing_a_client_would_not_have() {
     for line in WORDS.lines().filter(|line| !line.trim_start().starts_with('#')) {
-        for name in bash::INJECTED_NAMES {
+        for name in bash_interop::INJECTED_NAMES {
             assert!(!line.contains(name), "{name} in a file a client vendors: {line}");
         }
     }

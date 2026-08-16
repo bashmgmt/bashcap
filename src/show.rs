@@ -1,14 +1,14 @@
 //! Reading a written capture back, and the one rendering of one.
 //!
 //! A value prints as the bash that would declare it, which is what
-//! [`bash::value`](crate::bash::value) already emits — so `bashcap show`, a
+//! [`bash::value`](bash_strings) already emits — so `bashcap show`, a
 //! test and a library caller all print the same text.
 
 use std::fmt;
 
 use super::{Capture, Variable, Value};
-use crate::bash::rig::{Doing, Failure};
-use crate::bash::value::{emit_assoc, emit_indexed, emit_scalar};
+use bash_interop::rig::{Doing, Failure};
+use bash_strings::{emit_assoc, emit_indexed, emit_scalar};
 
 /// Every capture in a file written by [`BashCap`](super::BashCap): one JSON
 /// object per line, in the order they were heard.

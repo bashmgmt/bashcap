@@ -1,8 +1,8 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
-use crate::bash::rig::{Driving, ExitStatus};
-use crate::bashcap::{captures, BashCap};
-use crate::tests::scripts::bash;
+use bash_interop::rig::{Driving, ExitStatus};
+use crate::{captures, BashCap};
+use bash_interop::scratch::bash;
 
 use super::{script, ENTRY};
 

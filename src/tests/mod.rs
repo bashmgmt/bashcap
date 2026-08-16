@@ -16,12 +16,12 @@ mod writing;
 
 use std::sync::Arc;
 
-use crate::bash::rig::{
+use bash_interop::rig::{
     Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Shell,
 };
-use crate::bashcap::instrument::WORDS;
-use crate::bashcap::{instrument, Capture, Tracing};
-use crate::tests::scripts::{bash, Scripts};
+use crate::instrument::WORDS;
+use crate::{instrument, Capture, Tracing};
+use bash_interop::scratch::{bash, Scripts};
 
 /// What a shipped script writes: strict options, the words beside it, and one
 /// line naming the hook rather than the words — so a client cannot displace the

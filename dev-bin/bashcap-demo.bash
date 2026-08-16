@@ -5,15 +5,17 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-WORK="$ROOT/target/bashcap-demo"
-BIN="$ROOT/target/debug/bashcap"
+TARGET="$(cd "$ROOT" && cargo metadata --format-version 1 --no-deps 2>/dev/null \
+    | grep -o '"target_directory":"[^"]*"' | head -1 | cut -d'"' -f4)"
+WORK="$TARGET/bashcap-demo"
+BIN="$TARGET/debug/bashcap"
 FIXTURE="${1:-$ROOT/__fixtures/bashcap_demo/demo.bash}"
 
 hr() { printf '\n\033[1;34m── %s\033[0m\n' "$1"; }
 
 mkdir -p "$WORK"
 hr "build"
-( cd "$ROOT" && cargo build --bin bashcap ) || exit 1
+( cd "$ROOT" && cargo build -p bashcap --bin bashcap ) || exit 1
 
 hr "the words (what a client script vendors, and how it guards it)"
 ASSET="$ROOT/assets/bashcap.bash"

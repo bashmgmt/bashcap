@@ -14,10 +14,10 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use mb_resolver::bash::rig::{
+use bash_interop::rig::{
     Attended, Doing, Driving, ExitStatus, Failure, Layout, Serving, JOINING,
 };
-use mb_resolver::bashcap::{captures, BashCap};
+use bashcap::{captures, BashCap};
 
 #[derive(Parser)]
 #[command(name = "bashcap", about = "Capture bash shell state at every BASHCAP call site")]
