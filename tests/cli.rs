@@ -89,15 +89,15 @@ fn without_the_switch_nothing_is_traced() {
     assert!(!text.contains("a target"), "no arguments were recorded to report: {text}");
 }
 
-/// `--reach by-hand` exports the address and nothing else: the script joins
-/// where it says `source "$BC_SESSION"`, and a shell it started before that is
-/// not a shell of the run.
+/// `--reach by-hand` exports the workspace and nothing else: the script
+/// joins where it says `source "$BC_SESSION/session.bash"`, and a shell it
+/// started before that is not a shell of the run.
 #[test]
 fn reach_by_hand_leaves_joining_to_the_script() {
     let scripts = Scripts::of(&[(
         "build.bash",
         r#"bash -c 'type BASHCAP >/dev/null 2>&1 && echo "joined without asking" >&2'
-        source "$BC_SESSION"
+        source "$BC_SESSION/session.bash"
         BASHCAP -BCS:"by hand"
         "#,
     )]);
@@ -127,8 +127,9 @@ fn help_says_how_a_script_joins() {
         let help = Command::new(BASHCAP).args([verb, "--help"]).output().expect("--help");
         let text = String::from_utf8(help.stdout).unwrap();
 
-        assert!(text.contains(r#"source "$BC_SESSION""#), "{verb} --help:\n{text}");
+        assert!(text.contains(r#"source "$BC_SESSION/session.bash""#), "{verb} --help:\n{text}");
         assert!(text.contains("BC_START"), "{verb} --help:\n{text}");
+        assert!(text.contains("BC_ATTACH"), "{verb} --help:\n{text}");
     }
 }
 
@@ -143,7 +144,11 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
             "work.bash",
             r#"set -euo pipefail
             source "${BASH_SOURCE[0]%/*}/lib/joining.bash"
+            at="$1"; shift
+            mkdir -p "$at"
             BC_START "$@"
+            until BC_UP "$at"; do sleep 0.01; done
+            BC_ATTACH "$at"
 
             step() { BASHCAP -BCS:"in a served shell"; }
             step 'a target'
@@ -157,6 +162,7 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
 
     let ran = Command::new("bash")
         .arg(scripts.at("work.bash"))
+        .arg(scripts.at("session.d"))
         .args([BASHCAP, "serve", "--at"])
         .arg(scripts.at("session.d"))
         .args(["--verbose", "--trace-calls", "--into"])
@@ -172,6 +178,6 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
     let text = String::from_utf8(shown.stdout).unwrap();
 
     assert!(text.contains("2 snapshots from 2 shells"), "the subshell is one of its own: {text}");
-    assert!(text.contains("step@work.bash:5 ('a target')"), "--trace-calls reached it: {text}");
+    assert!(text.contains("step@work.bash:9 ('a target')"), "--trace-calls reached it: {text}");
     assert!(text.contains("note  from a subshell"), "{text}");
 }

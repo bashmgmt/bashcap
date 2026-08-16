@@ -56,8 +56,8 @@ struct Decoded {
 impl Rig for Decoding {
     type Reaction = Decoded;
 
-    fn bash(&self) -> String {
-        instrument(Tracing::Off)
+    fn bash(&self, at: &Layout) -> String {
+        instrument(at, Tracing::Off)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {

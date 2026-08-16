@@ -4,7 +4,9 @@
 //! vendors, naming nothing of the protocol. [`EFFECT`] is what a call does,
 //! and needs both the protocol and the frame walk.
 
+use bash_interop::rig::Layout;
 use bash_interop::stack;
+use bash_strings::emit_scalar;
 
 /// `BASHCAP` and `WITH_BASHCAP`. Shipped as an asset so a client's copy and
 /// the injected one are the same bytes.
@@ -33,17 +35,16 @@ pub enum Tracing {
     Calls,
 }
 
-/// The join: the words speak under `BASHCAP`, and `$1` is the workspace the
-/// invocation hands the rig's bash.
-const JOIN: &str = "BC_JOIN BASHCAP \"$1\"\n";
-
 /// The bash a rig hands the subject, for any rig that wants what bashcap
-/// harvests. The frame walk comes with it, since a snapshot reports one. The
-/// join comes before the trace: `TRACE` arms itself from the next command,
-/// which must be the subject's, not the join.
-pub fn instrument(tracing: Tracing) -> String {
+/// harvests, generated against the settled workspace: the words speak under
+/// `BASHCAP`, and the join carries the coordinate baked in, quoted. The
+/// frame walk comes with it, since a snapshot reports one. The join comes
+/// before the trace: `TRACE` arms itself from the next command, which must
+/// be the subject's, not the join.
+pub fn instrument(at: &Layout, tracing: Tracing) -> String {
+    let join = format!("BC_JOIN BASHCAP {}\n", emit_scalar(at.text()));
     match tracing {
-        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, JOIN]),
-        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, JOIN, TRACE]),
+        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, &join]),
+        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, &join, TRACE]),
     }
 }

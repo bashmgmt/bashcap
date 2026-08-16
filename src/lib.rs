@@ -62,8 +62,8 @@ impl Rig for BashCap {
     /// The instrument reaches every shell through the address, which is why
     /// tracing lives here and not on the command line: `BASH_ENV` reaches a
     /// subject's children, its argv does not.
-    fn bash(&self) -> String {
-        instrument(self.tracing)
+    fn bash(&self, at: &Layout) -> String {
+        instrument(at, self.tracing)
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
