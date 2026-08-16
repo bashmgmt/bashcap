@@ -231,8 +231,6 @@ impl Rig for BashCap {
         instrument(self.tracing)
     }
 
-    fn joining(&self, at: &Layout) -> String { /* BASHCAP_INIT, as data */ }
-
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
         Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
     }

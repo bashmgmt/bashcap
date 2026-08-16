@@ -62,10 +62,6 @@ impl Rig for Decoding {
         instrument(Tracing::Off)
     }
 
-    fn joining(&self, at: &Layout) -> String {
-        crate::joining(at)
-    }
-
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {
         Ok(Decoded { shell, seen: Vec::new() })
     }
