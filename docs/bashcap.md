@@ -68,9 +68,8 @@ own.
 
 ## The instrument
 
-`__bc_capture`, whole (anchored — the tail of `src/words.bash`):
+`__bc_capture`, whole — the tail of `src/words.bash`:
 
-<!-- quote: src/words.bash anchor=capture -->
 ```bash
 __bc_capture() {
     local IFS=' '

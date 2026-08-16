@@ -46,7 +46,6 @@ WITH_BASHCAP() {
 # every join below is `[*]@Q` and uses the caller's, and a subject with one of
 # its own would corrupt them. Returning gives the subject's back — including an
 # `IFS` that was unset — before anything of the subject's runs.
-# ANCHOR: capture
 __bc_capture() {
     local IFS=' '
 
@@ -78,4 +77,3 @@ __bc_capture() {
         vars    "(${__bc_declared[*]@Q})" \
         notes   "(${__bc_notes[*]@Q})"
 }
-# ANCHOR_END: capture
