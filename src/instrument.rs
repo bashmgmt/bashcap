@@ -1,7 +1,7 @@
 //! The bash bashcap injects into a subject's shells.
 //!
-//! Two halves. [`WORDS`] is what a call site says; [`EFFECT`] is what a
-//! call does, and needs both the protocol and the frame walk.
+//! [`WORDS`] carries what a call site says and what a call does; the walk
+//! and the protocol come in front of it.
 
 use bash_interop::rig::Layout;
 use bash_interop::stack;
@@ -9,9 +9,6 @@ use bash_strings::emit_scalar;
 
 /// `BASHCAP` and `WITH_BASHCAP`.
 pub(crate) const WORDS: &str = include_str!("words.bash");
-
-/// `__bc_capture`, which is what makes those words do anything.
-pub(crate) const EFFECT: &str = include_str!("effect.bash");
 
 /// Turns on the shell's own recording of call arguments, in every shell.
 pub(crate) const TRACE: &str = include_str!("trace.bash");
@@ -52,8 +49,8 @@ BASHCAP_INIT() {
 }
 "#;
     match tracing {
-        Tracing::Off => stack::with_walk(&[WORDS, EFFECT, INIT]),
-        Tracing::Calls => stack::with_walk(&[WORDS, EFFECT, TRACE, INIT_TRACING]),
+        Tracing::Off => stack::with_walk(&[WORDS, INIT]),
+        Tracing::Calls => stack::with_walk(&[WORDS, TRACE, INIT_TRACING]),
     }
 }
 

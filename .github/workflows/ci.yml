@@ -37,4 +37,5 @@ jobs:
       - run: cargo test --lib -- --test-threads=1
       - run: cargo test --test cli -- --test-threads=1
       - run: cargo test --doc
+      - run: docs/sync-quotes.bash --check
       - run: dev-bin/bashcap-demo.bash
