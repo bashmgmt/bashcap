@@ -8,19 +8,9 @@
 
 use std::process::Command;
 
-use bash_interop::rig::JOINING_BASH;
 use bash_interop::scratch::Scripts;
 
 const BASHCAP: &str = env!("CARGO_BIN_EXE_bashcap");
-
-/// The vendored client half this crate's fixtures source. Same bytes as the
-/// core's, asserted, so the copy cannot drift.
-const VENDORED_JOINING: &str = include_str!("../__fixtures/vendor/joining.bash");
-
-#[test]
-fn the_vendored_joining_is_the_cores_own() {
-    assert_eq!(VENDORED_JOINING, JOINING_BASH);
-}
 
 /// `--trace-calls` asks the subject's shells to record what each call was
 /// passed, and the subject is none the wiser: its own status comes back
@@ -135,38 +125,37 @@ fn help_says_how_a_script_joins() {
         let text = String::from_utf8(help.stdout).unwrap();
 
         assert!(text.contains(r#"BASHPROF_INIT "$BC_SESSION""#), "{verb} --help:\n{text}");
-        assert!(text.contains("BC_START"), "{verb} --help:\n{text}");
-        assert!(text.contains("BC_LOAD"), "{verb} --help:\n{text}");
+        assert!(text.contains("coproc SERVER"), "{verb} --help:\n{text}");
+        assert!(text.contains(r#"source "$workspace/prelude.bash""#), "{verb} --help:\n{text}");
     }
 }
 
-/// The vendoring contract end to end, over the shipped binary: a script that
-/// starts bashcap for itself vendors nothing but the joining words —
-/// `BASHCAP` is defined by joining.
+/// A served session end to end, over the shipped binary: a script that
+/// starts bashcap for itself vendors nothing at all — `BASHCAP` is defined
+/// by the laid files.
 #[test]
 fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
-    let scripts = Scripts::of(&[
-        ("lib/joining.bash", VENDORED_JOINING),
-        (
-            "work.bash",
-            r#"
-            set -euo pipefail
-            source "${BASH_SOURCE[0]%/*}/lib/joining.bash"
-            declare -- workspace="${1:?the session workspace}"; shift
-            mkdir -p "$workspace"
-            BC_START "$@"
-            until BC_UP "$workspace"; do sleep 0.01; done
-            BC_LOAD "$workspace"
-            BASHCAP_INIT "$workspace"
+    let scripts = Scripts::of(&[(
+        "work.bash",
+        r#"
+        set -euo pipefail
+        declare -- workspace="${1:?the session workspace}"; shift
+        mkdir -p "$workspace"
+        coproc SERVER { "$@"; }
+        until [[ -p "$workspace/join" ]]; do sleep 0.01; done
+        source "$workspace/prelude.bash"
+        source "$workspace/rig.bash"
+        BASHCAP_INIT "$workspace"
 
-            step() { BASHCAP -BCS:"in a served shell"; }
-            step 'a target'
-            ( BASHCAP -BCS:"from a subshell" )
+        step() { BASHCAP -BCS:"in a served shell"; }
+        step 'a target'
+        ( BASHCAP -BCS:"from a subshell" )
 
-            BC_LEAVE
-            "#,
-        ),
-    ]);
+        declare -- handle="${SERVER[1]}"
+        exec {handle}>&-
+        wait "$SERVER_PID"
+        "#,
+    )]);
     let into = scripts.at("capture.jsonl");
 
     let ran = Command::new("bash")

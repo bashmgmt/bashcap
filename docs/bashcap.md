@@ -30,7 +30,7 @@ from the same `Capture` struct — the symmetry is the code, not a convention:
 | | who starts the shells | how they are reached | its exit code |
 |---|---|---|---|
 | `run` | the tool, from the command line it was given | `BC_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
-| `serve` | a bash script, which named and made the workspace (`--at`, required, existing) and started this process as a coprocess | its own choice — the workspace is the address; the join fifo in it says the session is up (`BC_UP`), and the script loads and initiates by the same dir (`BC_LOAD`, `BASHCAP_INIT`) | its own: 0, or 1 if the capture did not come out |
+| `serve` | a bash script, which named and made the workspace (`--at`, required, existing) and started this process as a coprocess | its own choice — the workspace is the address; the join fifo in it says the session is up, and the script sources the laid files and initiates by the same dir (`BASHCAP_INIT`) | its own: 0, or 1 if the capture did not come out |
 
 `--verbose` goes to stderr in both roles; stdout stays the subject's own. `--trace-calls` differs in degree rather than kind:
 sourced through `BASH_ENV` it arms itself before the subject's first line,
@@ -38,8 +38,9 @@ sourced into a shell that is already running — by hand, or under `serve` — i
 installs a `DEBUG` trap there, replacing one the client had. `run --help` and
 `serve --help` end with `JOINING`, every way a script joins.
 
-A client that only ever runs under `serve` vendors nothing at all: joining
-injects the words, so `BASHCAP` is defined from the moment `BC_LOAD` returns and joined from `BASHCAP_INIT`.
+A client that only ever runs under `serve` vendors nothing at all: the
+words arrive with the laid files, so `BASHCAP` is defined from the moment
+`rig.bash` is sourced and joined from `BASHCAP_INIT`.
 
 `show` renders a capture through `Capture`'s `Display`, which is the same
 text a library caller gets from `println!("{capture}")`. One rendering, in

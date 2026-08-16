@@ -2,9 +2,7 @@
 
 A thin user of `bash-interop`: the instrument (bash injected into every
 shell), the rig impl, the reading, and the `bashcap` binary. The words a client
-vendors are `assets/bashcap.bash`; `__fixtures/vendor/joining.bash` is the
-vendored client half, asserted same-bytes against `rig::JOINING_BASH` in
-`tests/cli.rs`. Reference: `docs/bashcap.md`.
+vendors are `assets/bashcap.bash`. Reference: `docs/bashcap.md`.
 
 ```bash
 cargo test --lib -- --test-threads=1

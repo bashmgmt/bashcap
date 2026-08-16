@@ -52,8 +52,8 @@ enum What {
 
     /// Capture for a bash script that started this process as a coprocess:
     /// it holds this process's standard input, and lets go to end the
-    /// session. Nothing is written back — the client probes and joins by the
-    /// same directory it names here (`BC_UP`, `BC_ATTACH`).
+    /// session. Nothing is written back — the client probes, loads and
+    /// joins by the same directory it names here.
     #[command(after_long_help = JOINING)]
     Serve {
         #[command(flatten)]

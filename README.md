@@ -6,7 +6,7 @@ notes — as one JSON object per line, then render it back with `bashcap show`.
 
 ```
 bashcap run   [--reach bash-env|by-hand] --into capture.jsonl [--trace-calls] -- bash build.bash
-bashcap serve --at session.d --into capture.jsonl      # started BY a script: BC_START, BC_UP, BC_LOAD, BASHCAP_INIT
+bashcap serve --at session.d --into capture.jsonl      # started BY a script: coproc, probe, source, BASHCAP_INIT
 bashcap show  capture.jsonl
 ```
 
