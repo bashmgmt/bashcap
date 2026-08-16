@@ -62,7 +62,7 @@ CPS form: it snapshots, runs the continuation, and returns *its* status.
 
 Keeping those call sites runnable without the tool is the client's own, and
 `assets/bashcap.bash` is what it vendors to do it — see
-[vendoring.md](vendoring.md).
+`bash-interop/KB/vendoring.md`.
 
 ## The instrument
 
@@ -82,12 +82,12 @@ Keeping those call sites runnable without the tool is the client's own, and
 
 The frame walk is not bashcap's: `__bc_stack` is shared with every tool that
 reports a stack, and contributes six sections of its own — see
-[stack.md](stack.md). Each section here is an array literal, read back with
+`bash-interop/KB/stack.md`. Each section here is an array literal, read back with
 `parse_array`.
 
 `state` holds only what changes while a shell runs and nothing else records —
 `$SECONDS`. Which bash it is, how it was started and which options it had on
-were said once when the shell joined ([shell.md](shell.md)), and `$SHLVL` with
+were said once when the shell joined (`bash-interop/KB/shell.md`), and `$SHLVL` with
 them. A snapshot repeating any of those would be a second source for one fact.
 
 Two details in the bash worth knowing:
@@ -203,13 +203,13 @@ or a `bashdb` session — gets them without the flag.
 `effect.bash` does none. It calls `__bc_stack`, which ships bash's five arrays
 as they are, and every index — which frames are the instrument's, which line a
 frame is executing, where a call's arguments sit in the flat stack and which
-way round they are — is undone in Rust. [stack.md](stack.md) is the whole of
+way round they are — is undone in Rust. `bash-interop/KB/stack.md` is the whole of
 it, including why alignment rather than `shopt -q` decides whether a record is
 trustworthy.
 
 `__fixtures/bashcap_demo/child.bash` traces itself, so one demo run shows both
 paths. About +45 µs on a six-deep stack when traced, against a ~480 µs
-snapshot — see [measurements.md](measurements.md#cost-of-a-snapshot).
+snapshot — see `bash-interop/KB/measurements.md#cost-of-a-snapshot`.
 
 Recognise, then decode — the shape every decoder in the crate takes. Decoding
 mirrors the assembly exactly: `Columns::of` takes the six the frame walk
@@ -219,7 +219,7 @@ attribute letters, and its value.
 
 Note what the snapshot does **not** carry: a timestamp or a pid. The clocks
 are on the message, and everything about the shell is on the shell — which a
-reaction was handed at construction. See [shell.md](shell.md).
+reaction was handed at construction. See `bash-interop/KB/shell.md`.
 
 ## The tool
 
@@ -286,7 +286,7 @@ snapshot's own fields rather than above them.
 Lines are written as they arrive, each carrying the shell's own clock and the
 run's, so ordering downstream is exact and is `sort`'s job. Writing in
 `hear` keeps resident memory independent of run length — see
-[measurements.md](measurements.md#memory).
+`bash-interop/KB/measurements.md#memory`.
 
 An indexed array travels as `[index, value]` pairs, not as an object: a bash
 indexed array is sparse, so its indices are data, and JSON can only spell an
@@ -329,8 +329,7 @@ that calls `run`. Four properties of a transparent wrapper:
 make bashcap-demo [SCRIPT=path/to/your.bash]
 ```
 
-Builds the debug binary, shows the vendored words and checks them against the
-asset, runs `__fixtures/bashcap_demo/demo.bash` once with no tool and once
+Builds the debug binary, shows the words, runs `__fixtures/bashcap_demo/demo.bash` once with no tool and once
 under `bashcap run`, and renders the capture with `bashcap show`. The fixture
 exercises every facility in one file — typed variables, ambient context,
 `BASH_REMATCH`, nested frames with argv, the CPS form, a subshell and a child
@@ -343,7 +342,7 @@ there too, through `BASH_ENV`.
 
 ## See also
 
-- [wire.md](wire.md#three-files) — how a rig's bash reaches every shell
-- [rig.md](rig.md) — the trait it implements
+- `bash-interop/KB/wire.md#three-files` — how a rig's bash reaches every shell
+- `bash-interop/KB/rig.md` — the trait it implements
 - `tests/examples/snapshotting.rs` — its instrument, reused without its CLI
 - `src/bashcap/tests.rs` — its bash-level tests: one run covering every section

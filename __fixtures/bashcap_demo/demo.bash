@@ -2,7 +2,7 @@
 # Everything bashcap captures, in one script. No test asserts these line
 # numbers — edit freely.
 
-source "$(dirname "${BASH_SOURCE[0]}")/bashcap.bash"
+source "$(dirname "${BASH_SOURCE[0]}")/../../assets/bashcap.bash"
 declare -F __bc_capture >/dev/null || __bc_capture() { :; }
 
 declare -- greeting="hello world"

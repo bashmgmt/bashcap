@@ -5,7 +5,7 @@
 # wants them turns it on itself, as its own first statement.
 shopt -s extdebug
 
-source "$(dirname "${BASH_SOURCE[0]}")/bashcap.bash"
+source "$(dirname "${BASH_SOURCE[0]}")/../../assets/bashcap.bash"
 declare -F __bc_capture >/dev/null || __bc_capture() { :; }
 
 child_work() {
