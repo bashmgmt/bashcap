@@ -8,5 +8,5 @@ every `BASHCAP` call site, as one JSON object per line.
 | [bashcap.md](bashcap.md) | the words, the instrument, the decoder, the two verbs, the playground |
 
 The core's book — sessions, rigs, joining, the wire — is
-`bash-interop/docs/` in its own repository; this book covers only what
+[bash-interop's book](https://bashmgmt.github.io/bash-interop/) in its own repository; this book covers only what
 bashcap adds.

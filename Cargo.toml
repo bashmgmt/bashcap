@@ -3,11 +3,11 @@ name = "bashcap"
 version = "0.1.0"
 edition = "2024"
 description = "A transparent bash wrapper that writes the full state of a running shell at every BASHCAP call site, as one JSON object per line."
+license = "MIT"
 readme = "README.md"
-repository = "https://github.com/simlei/bashcap"
+repository = "https://github.com/bashmgmt/bashcap"
 keywords = ["bash", "shell", "debugging", "snapshot", "tracing"]
 categories = ["development-tools::debugging", "command-line-utilities"]
-exclude = [".plans/**"]
 
 [dependencies]
 bash-interop = "*"
