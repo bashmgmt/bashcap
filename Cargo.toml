@@ -1,6 +1,6 @@
 [package]
 name = "bashcap"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A transparent bash wrapper that writes the full state of a running shell at every BASHCAP call site, as one JSON object per line."
 license = "MIT"
@@ -10,7 +10,7 @@ keywords = ["bash", "shell", "debugging", "snapshot", "tracing"]
 categories = ["development-tools::debugging", "command-line-utilities"]
 
 [dependencies]
-bash-interop = "0.1"
+bash-interop = "0.2"
 bash-strings = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"

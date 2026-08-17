@@ -6,8 +6,8 @@ Mark the point in the script:
 
 ```bash
 greet() {
-    local who=$1
-    local greeting="hello $who"
+    declare who=$1
+    declare greeting="hello $who"
     BASHCAP -BCV:who -BCV:greeting -BCS:before-the-echo
     echo "$greeting"
 }

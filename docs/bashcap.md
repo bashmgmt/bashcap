@@ -70,30 +70,31 @@ without the tool defines the word itself, in one guarded line.
 
 ```bash
 __bc_capture() {
-    local IFS=' '
+    declare IFS=' '
 
-    local -a __bc_walk=()
+    declare -a __bc_walk=()
     __bc_stack __bc_walk "$1"
 
     # What changes while a shell runs and nothing else says. The rest of what a
     # shell is — which bash, how it was started, which options it had on, how
     # deep a subshell it is — it said once when it joined.
-    local -a __bc_state=(
+    declare -a __bc_state=(
         seconds "$SECONDS"
     )
 
-    local -a __bc_rematch=("${BASH_REMATCH[@]}")
+    declare -a __bc_rematch=("${BASH_REMATCH[@]}")
 
-    local -a __bc_declared=()
-    local __bc_name
+    declare -a __bc_declared=()
+    declare __bc_name
     for __bc_name in "${__bc_vars[@]}" ${!BASHCAP__CTX__@}; do
         declare -p "$__bc_name" &>/dev/null || continue
-        local -n __bc_ref="$__bc_name"
+        declare -n __bc_ref="$__bc_name"
         __bc_declared+=("${__bc_ref[*]@A}")
         unset -n __bc_ref
     done
 
-    BC_INSTR BASHCAP say __BASHCAP__ \
+    declare -- BC_SAY__ARG_LABEL=BASHCAP
+    BC_SAY __BASHCAP__ \
         "${__bc_walk[@]}" \
         state   "(${__bc_state[*]@Q})" \
         rematch "(${__bc_rematch[*]@Q})" \
@@ -116,7 +117,7 @@ fact.
 Two details in the bash need explaining.
 
 ```bash
-local IFS=' '
+declare IFS=' '
 ```
 
 Function-scoped, because the sections above are joined with `[*]`, and a
