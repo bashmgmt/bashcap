@@ -2,7 +2,7 @@
 # __bc_capture, whose argument is how many leading frames of the walk belong
 # to the instrument — a number each word knows about itself.
 
-# Leading -BCV:/-BCS: flags off the front, into two arrays of the caller's.
+# Leading -BCV:/-BCS: flags off the front, into two arrays the caller declared.
 # Every consumed word lands in one of them, so their combined length is how far
 # the caller has to shift.
 __bc_take_flags() {
@@ -42,10 +42,10 @@ WITH_BASHCAP() {
 # knows its own depth.
 #
 # The flags the word parsed are read here as the caller's locals, which is
-# what dynamic scoping is for. So is `IFS`: it is taken for this frame alone, since
-# every join below is `[*]@Q` and uses the caller's, and a subject with one of
-# its own would corrupt them. Returning gives the subject's back — including an
-# `IFS` that was unset — before anything of the subject's runs.
+# what dynamic scoping is for. So is `IFS`: it is taken for this frame alone,
+# since every join below is `[*]@Q` and reads whatever `IFS` is in scope, and a
+# subject that set its own would corrupt them. Returning restores the subject's
+# `IFS` — including one that was unset — before any subject code runs.
 __bc_capture() {
     declare IFS=' '
 

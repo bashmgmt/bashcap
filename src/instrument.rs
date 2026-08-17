@@ -35,7 +35,7 @@ pub enum Tracing {
 /// with them since a snapshot reports one, and `BASHCAP_INIT <dir>` is the
 /// channel setup on offer — defined here, called by nothing here. Under
 /// [`Tracing::Calls`] the init also arms the trace, after the join: arming
-/// hooks the next command, which must be the subject's.
+/// hooks the next command, which has to be a command of the subject.
 pub fn instrument(tracing: Tracing) -> String {
     const INIT: &str = r#"
 BASHCAP_INIT() {

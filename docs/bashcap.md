@@ -29,7 +29,7 @@ the same `Capture` struct:
 
 | | who starts the shells | how they are reached | its exit code |
 |---|---|---|---|
-| `run` | the tool, from the command line it was given | `BASHCAP_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
+| `run` | the tool, from the command line it was given | `BASHCAP_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | whatever the subject exited with |
 | `serve` | a bash script, which named and made the workspace (`--at`, required, existing) and started this process as a coprocess | its own choice — the workspace is the address; the join fifo in it says the session is up, and the script sources the laid files and initiates by the same dir (`BASHCAP_INIT`) | its own: 0, or 1 if the capture did not come out |
 
 `--verbose` goes to stderr in both roles, and stdout is left to the subject.
@@ -221,8 +221,8 @@ or a `bashdb` session — gets them without the flag.
 ### The stack math
 
 `__bc_capture` does none. It calls `__bc_stack`, which ships bash's five arrays
-as they are, and every index is undone in Rust: which frames are the
-instrument's, which line a frame is executing, and where a call's arguments sit
+as they are, and every index is undone in Rust: which frames belong to the
+instrument, which line a frame is executing, and where a call's arguments sit
 in the flat stack and which way round they are. [bash-interop: stack](https://bashmgmt.github.io/bash-interop/stack.html)
 covers all of it, including why alignment rather than `shopt -q` decides
 whether a record is trustworthy.

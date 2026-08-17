@@ -50,8 +50,8 @@ enum What {
 
         /// The wrapped command, program included — `bash build.bash`, or
         /// `make test`, whose own shells join too. Everything from the first
-        /// plain word on is the subject's; a command that itself starts with
-        /// a dash goes behind `--`.
+        /// plain word on belongs to the subject; a command that itself starts
+        /// with a dash goes behind `--`.
         #[arg(trailing_var_arg = true, required = true)]
         argv: Vec<String>,
     },
@@ -162,8 +162,8 @@ impl Capture {
         }
     }
 
-    /// The exit code is the subject's, so a wrapped script is indistinguishable
-    /// from an unwrapped one.
+    /// The exit code comes from the subject, so a wrapped script is
+    /// indistinguishable from an unwrapped one.
     async fn run(&self, reach: Reach, argv: &[String]) -> Result<ExitStatus, Failure> {
         let ran = self.tool()?.run(argv, |at| reach.environment(at)).await?;
 
@@ -206,8 +206,8 @@ async fn main() {
     std::process::exit(code);
 }
 
-/// The exit code the subcommand earned. Only `run` has one of its own — it is
-/// the subject's — and everything that fails does so the same way.
+/// The exit code the subcommand earned. Only `run` has one of its own, taken
+/// from the subject, and everything that fails does so the same way.
 async fn perform(what: &What) -> Result<i32, Failure> {
     match what {
         What::Run {

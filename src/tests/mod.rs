@@ -24,7 +24,7 @@ use bash_interop::scratch::{Scripts, bash};
 /// A subject script under the strict options a shipped one has — `set -u`
 /// is the option that reaches furthest into the tool, every name the
 /// instrument reads having to be one it set. The words arrive through the
-/// session, like any subject's.
+/// session, as they do for any subject.
 pub(super) fn script(body: &str) -> Scripts {
     Scripts::of(&[(
         ENTRY,
