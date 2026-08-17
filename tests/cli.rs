@@ -37,18 +37,31 @@ fn trace_calls_reaches_the_subject_and_the_status_comes_back() {
         .output()
         .expect("the built bashcap");
 
-    assert_eq!(ran.status.code(), Some(7), "the subject's own code, not the wrapper's");
+    assert_eq!(
+        ran.status.code(),
+        Some(7),
+        "the subject's own code, not the wrapper's"
+    );
 
-    let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
+    let shown = Command::new(BASHCAP)
+        .arg("show")
+        .arg(&into)
+        .output()
+        .expect("bashcap show");
     let text = String::from_utf8(shown.stdout).unwrap();
 
-    assert!(text.contains("1 snapshots from 1 shells"), "{text}");
     assert!(
-        text.contains("step@build.bash:2 ('a target' '--flag')")
-            && text.contains("main@build.bash:4 ()"),
+        text.contains("1 snapshots from 1 shells"),
+        "{text}"
+    );
+    assert!(
+        text.contains("step@build.bash:2 ('a target' '--flag')") && text.contains("main@build.bash:4 ()"),
         "each frame carries its own call site and the arguments it was passed: {text}"
     );
-    assert!(text.contains("note  one step"), "{text}");
+    assert!(
+        text.contains("note  one step"),
+        "{text}"
+    );
 }
 
 /// Without it, a frame says its arguments were never recorded rather than
@@ -74,11 +87,21 @@ fn without_the_switch_nothing_is_traced() {
         .expect("the built bashcap");
     assert_eq!(ran.status.code(), Some(0));
 
-    let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
+    let shown = Command::new(BASHCAP)
+        .arg("show")
+        .arg(&into)
+        .output()
+        .expect("bashcap show");
     let text = String::from_utf8(shown.stdout).unwrap();
 
-    assert!(text.contains("step@build.bash:2\n"), "the call site alone: {text}");
-    assert!(!text.contains("a target"), "no arguments were recorded to report: {text}");
+    assert!(
+        text.contains("step@build.bash:2\n"),
+        "the call site alone: {text}"
+    );
+    assert!(
+        !text.contains("a target"),
+        "no arguments were recorded to report: {text}"
+    );
 }
 
 /// `--reach by-hand` provisions a definitions file and the workspace: every
@@ -107,26 +130,52 @@ fn reach_by_hand_leaves_joining_to_the_script() {
         .output()
         .expect("the built bashcap");
     assert_eq!(ran.status.code(), Some(0));
-    assert!(ran.stderr.is_empty(), "{}", String::from_utf8_lossy(&ran.stderr));
+    assert!(
+        ran.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&ran.stderr)
+    );
 
-    let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
+    let shown = Command::new(BASHCAP)
+        .arg("show")
+        .arg(&into)
+        .output()
+        .expect("bashcap show");
     let text = String::from_utf8(shown.stdout).unwrap();
 
-    assert!(text.contains("1 snapshots from 1 shells"), "{text}");
+    assert!(
+        text.contains("1 snapshots from 1 shells"),
+        "{text}"
+    );
     assert!(text.contains("note  by hand"), "{text}");
-    assert!(!text.contains("never joined"), "the child had the words, not the channel: {text}");
+    assert!(
+        !text.contains("never joined"),
+        "the child had the words, not the channel: {text}"
+    );
 }
 
 /// Both session-opening verbs tell a script how to join, under `--help`.
 #[test]
 fn help_says_how_a_script_joins() {
     for verb in ["run", "serve"] {
-        let help = Command::new(BASHCAP).args([verb, "--help"]).output().expect("--help");
+        let help = Command::new(BASHCAP)
+            .args([verb, "--help"])
+            .output()
+            .expect("--help");
         let text = String::from_utf8(help.stdout).unwrap();
 
-        assert!(text.contains(r#"BASHCAP_INIT "$BASHCAP_SESSION""#), "{verb} --help:\n{text}");
-        assert!(text.contains("coproc SERVER"), "{verb} --help:\n{text}");
-        assert!(text.contains(r#"source "$workspace/prelude.bash""#), "{verb} --help:\n{text}");
+        assert!(
+            text.contains(r#"BASHCAP_INIT "$BASHCAP_SESSION""#),
+            "{verb} --help:\n{text}"
+        );
+        assert!(
+            text.contains("coproc SERVER"),
+            "{verb} --help:\n{text}"
+        );
+        assert!(
+            text.contains(r#"source "$workspace/prelude.bash""#),
+            "{verb} --help:\n{text}"
+        );
     }
 }
 
@@ -168,13 +217,33 @@ fn a_script_starts_bashcap_for_itself_and_keeps_the_capture() {
         .expect("bash");
 
     let complaints = String::from_utf8(ran.stderr).unwrap();
-    assert_eq!(ran.status.code(), Some(0), "{complaints}");
-    assert!(complaints.contains("bashcap: 2 snapshots"), "the tally is on stderr: {complaints}");
+    assert_eq!(
+        ran.status.code(),
+        Some(0),
+        "{complaints}"
+    );
+    assert!(
+        complaints.contains("bashcap: 2 snapshots"),
+        "the tally is on stderr: {complaints}"
+    );
 
-    let shown = Command::new(BASHCAP).arg("show").arg(&into).output().expect("bashcap show");
+    let shown = Command::new(BASHCAP)
+        .arg("show")
+        .arg(&into)
+        .output()
+        .expect("bashcap show");
     let text = String::from_utf8(shown.stdout).unwrap();
 
-    assert!(text.contains("2 snapshots from 2 shells"), "the subshell is one of its own: {text}");
-    assert!(text.contains("step@work.bash:11 ('a target')"), "--trace-calls reached it: {text}");
-    assert!(text.contains("note  from a subshell"), "{text}");
+    assert!(
+        text.contains("2 snapshots from 2 shells"),
+        "the subshell is one of its own: {text}"
+    );
+    assert!(
+        text.contains("step@work.bash:11 ('a target')"),
+        "--trace-calls reached it: {text}"
+    );
+    assert!(
+        text.contains("note  from a subshell"),
+        "{text}"
+    );
 }

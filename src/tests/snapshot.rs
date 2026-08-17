@@ -32,35 +32,67 @@ async fn a_snapshot_carries_the_whole_shell_state() {
     assert_eq!(snaps.len(), 2);
 
     let deep = &snaps[0].snapshot;
-    let names: Vec<String> = deep.stack.frames().map(|frame| frame.site.to_string()).collect();
+    let names: Vec<String> = deep
+        .stack
+        .frames()
+        .map(|frame| frame.site.to_string())
+        .collect();
     assert_eq!(names, ["inner", "outer", "main"]);
-    assert_eq!(deep.stack.top().source.to_string(), "main.bash", "the file, absolute underneath");
+    assert_eq!(
+        deep.stack.top().source.to_string(),
+        "main.bash",
+        "the file, absolute underneath"
+    );
     assert!(deep.stack.top().lineno > 0);
 
-    assert_eq!(deep.vars["greeting"].value, Value::Scalar("hello world".into()));
+    assert_eq!(
+        deep.vars["greeting"].value,
+        Value::Scalar("hello world".into())
+    );
     assert_eq!(deep.vars["items"].attrs, "a");
     assert_eq!(
         deep.vars["items"].value,
         Value::Indexed([(0, "alpha".to_string()), (1, "beta gamma".to_string())].into())
     );
     assert_eq!(deep.vars["conf"].attrs, "A");
-    assert_eq!(deep.vars["tries"].attrs, "i", "attributes survive, unlike a hand-rolled capture");
-    assert!(!deep.vars.contains_key("absent"), "a missing variable is skipped");
-    assert_eq!(deep.vars["BASHCAP__CTX__phase"].value, Value::Scalar("setup".into()));
+    assert_eq!(
+        deep.vars["tries"].attrs, "i",
+        "attributes survive, unlike a hand-rolled capture"
+    );
+    assert!(
+        !deep.vars.contains_key("absent"),
+        "a missing variable is skipped"
+    );
+    assert_eq!(
+        deep.vars["BASHCAP__CTX__phase"].value,
+        Value::Scalar("setup".into())
+    );
 
-    assert_eq!(deep.rematch, ["build-2026", "build", "2026"]);
+    assert_eq!(
+        deep.rematch,
+        ["build-2026", "build", "2026"]
+    );
     assert_eq!(deep.notes, ["deep"]);
 
     // Two homes and no overlap: what only this moment can say, and what the
     // shell said once when it joined.
     assert!(deep.state.contains_key("seconds"));
     assert!(snaps[0].shell.shlvl > 0);
-    assert!(snaps[0].shell.bash.version.at_least(5, 0, 0), "$EPOCHREALTIME is bash 5");
-    assert!(snaps[0].shell.bash.invocation.from_a_file(), "a script bash was handed to read");
+    assert!(
+        snaps[0].shell.bash.version.at_least(5, 0, 0),
+        "$EPOCHREALTIME is bash 5"
+    );
+    assert!(
+        snaps[0].shell.bash.invocation.from_a_file(),
+        "a script bash was handed to read"
+    );
     assert!(!snaps[0].shell.bash.invocation.interactive);
 
     let wrapped = &snaps[1].snapshot;
-    assert_eq!(wrapped.stack.top().site.to_string(), "WITH_BASHCAP");
+    assert_eq!(
+        wrapped.stack.top().site.to_string(),
+        "WITH_BASHCAP"
+    );
     assert_eq!(wrapped.notes, ["before step"]);
 }
 
@@ -76,8 +108,14 @@ async fn a_variable_holding_a_byte_bash_cannot_show_survives_the_wire() {
     .await;
 
     let vars = &snaps[0].snapshot.vars;
-    assert_eq!(vars["high"].value, Value::Scalar("\u{ff}".into()));
-    assert_eq!(vars["low"].value, Value::Scalar("a\u{1}b".into()));
+    assert_eq!(
+        vars["high"].value,
+        Value::Scalar("\u{ff}".into())
+    );
+    assert_eq!(
+        vars["low"].value,
+        Value::Scalar("a\u{1}b".into())
+    );
 }
 
 #[tokio::test]
@@ -93,7 +131,15 @@ async fn the_walk_survives_the_subjects_own_shell_options() {
     )
     .await;
 
-    assert_eq!(snaps.len(), 2, "the script ran on past the first snapshot");
-    assert_eq!(snaps[0].snapshot.stack.top().args, Some(Vec::new()), "f was called with none");
+    assert_eq!(
+        snaps.len(),
+        2,
+        "the script ran on past the first snapshot"
+    );
+    assert_eq!(
+        snaps[0].snapshot.stack.top().args,
+        Some(Vec::new()),
+        "f was called with none"
+    );
     assert_eq!(snaps[1].snapshot.notes, ["after"]);
 }

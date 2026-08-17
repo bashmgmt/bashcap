@@ -57,5 +57,8 @@ BASHCAP_INIT() {
 /// The standard initiation: `BASHCAP_INIT '<dir>'`. Data — written into a
 /// provisioned `bash_env.bash`, or said by a client's own line.
 pub fn joining(at: &Layout) -> String {
-    format!("BASHCAP_INIT {}\n", emit_scalar(at.text()))
+    format!(
+        "BASHCAP_INIT {}\n",
+        emit_scalar(at.text())
+    )
 }

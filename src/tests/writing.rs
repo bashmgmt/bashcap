@@ -1,10 +1,10 @@
 //! The JSON line a run writes, and the reading that takes it back.
 
+use crate::{BashCap, captures};
 use bash_interop::rig::{Driving, ExitStatus, Provision};
-use crate::{captures, BashCap};
 use bash_interop::scratch::bash;
 
-use super::{script, ENTRY};
+use super::{ENTRY, script};
 
 #[tokio::test]
 async fn each_snapshot_is_written_as_it_arrives() {
@@ -18,13 +18,20 @@ async fn each_snapshot_is_written_as_it_arrives() {
 
     let ran = BashCap::writing(&into)
         .unwrap()
-        .run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
+        .run(&bash(scripts.at(ENTRY)), |at| {
+            Ok(vec![at.bash_env(
+                Provision::Joining(&crate::joining(at)),
+            )?])
+        })
         .await
         .unwrap()
         .whole()
         .unwrap();
 
-    assert_eq!(ran.shells.iter().map(|at| at.kept).sum::<usize>(), 2);
+    assert_eq!(
+        ran.shells.iter().map(|at| at.kept).sum::<usize>(),
+        2
+    );
     assert_eq!(ran.subject, ExitStatus::Code(0));
 
     let rows: Vec<serde_json::Value> = std::fs::read_to_string(&into)
@@ -35,9 +42,15 @@ async fn each_snapshot_is_written_as_it_arrives() {
 
     assert_eq!(rows.len(), 2);
     for row in &rows {
-        assert!(row["shell"]["pid"].is_u64(), "the shell that took it, whole: {row}");
+        assert!(
+            row["shell"]["pid"].is_u64(),
+            "the shell that took it, whole: {row}"
+        );
         for key in ["stack", "state"] {
-            assert!(row["snapshot"].get(key).is_some(), "{key} missing from {row}");
+            assert!(
+                row["snapshot"].get(key).is_some(),
+                "{key} missing from {row}"
+            );
         }
     }
     assert_eq!(rows[0]["snapshot"]["notes"][0], "one");
@@ -57,7 +70,11 @@ async fn a_written_capture_reads_back_whole() {
 
     BashCap::writing(&into)
         .unwrap()
-        .run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
+        .run(&bash(scripts.at(ENTRY)), |at| {
+            Ok(vec![at.bash_env(
+                Provision::Joining(&crate::joining(at)),
+            )?])
+        })
         .await
         .unwrap()
         .whole()
@@ -66,6 +83,13 @@ async fn a_written_capture_reads_back_whole() {
     let read = captures(&std::fs::read_to_string(&into).unwrap()).unwrap();
 
     assert_eq!(read.len(), 1);
-    assert_eq!(read[0].snapshot.stack.top().args.as_deref(), Some(["arg".to_string()].as_slice()));
-    assert!(read[0].to_string().contains("f@main.bash"), "{}", read[0]);
+    assert_eq!(
+        read[0].snapshot.stack.top().args.as_deref(),
+        Some(["arg".to_string()].as_slice())
+    );
+    assert!(
+        read[0].to_string().contains("f@main.bash"),
+        "{}",
+        read[0]
+    );
 }

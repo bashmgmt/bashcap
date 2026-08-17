@@ -14,17 +14,18 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use bash_interop::rig::{
-    Attended, Doing, Driving, ExitStatus, Failure, Layout, Provision, Serving,
-};
-use bashcap::{captures, BashCap};
+use bash_interop::rig::{Attended, Doing, Driving, ExitStatus, Failure, Layout, Provision, Serving};
+use bashcap::{BashCap, captures};
 
 /// Every way a script joins this tool's sessions, in this tool's words —
 /// appended to the session-opening verbs' `--help`.
 const JOINING: &str = include_str!("joining.txt");
 
 #[derive(Parser)]
-#[command(name = "bashcap", about = "Capture bash shell state at every BASHCAP call site")]
+#[command(
+    name = "bashcap",
+    about = "Capture bash shell state at every BASHCAP call site"
+)]
 struct Cli {
     #[command(subcommand)]
     what: What,
@@ -97,10 +98,18 @@ enum Reach {
 
 impl Reach {
     fn environment(self, at: &Layout) -> Result<Vec<(OsString, OsString)>, Failure> {
-        let session = (OsString::from("BASHCAP_SESSION"), OsString::from(at.text()));
+        let session = (
+            OsString::from("BASHCAP_SESSION"),
+            OsString::from(at.text()),
+        );
         Ok(match self {
             Self::BashEnv => {
-                vec![session, at.bash_env(Provision::Joining(&bashcap::joining(at)))?]
+                vec![
+                    session,
+                    at.bash_env(Provision::Joining(&bashcap::joining(
+                        at,
+                    )))?,
+                ]
             }
             Self::ByHand => vec![session, at.bash_env(Provision::Definitions)?],
         })
@@ -146,7 +155,10 @@ impl Capture {
         if self.verbose {
             let written: usize = shells.iter().map(|shell| shell.kept).sum();
 
-            eprintln!("bashcap: {written} snapshots -> {}", self.into.display());
+            eprintln!(
+                "bashcap: {written} snapshots -> {}",
+                self.into.display()
+            );
         }
     }
 
@@ -198,9 +210,11 @@ async fn main() {
 /// the subject's — and everything that fails does so the same way.
 async fn perform(what: &What) -> Result<i32, Failure> {
     match what {
-        What::Run { capture, reach, argv } => {
-            capture.run(*reach, argv).await.map(ExitStatus::shell_code)
-        }
+        What::Run {
+            capture,
+            reach,
+            argv,
+        } => capture.run(*reach, argv).await.map(ExitStatus::shell_code),
         What::Serve { capture, at } => capture.serve(at).await.map(|()| 0),
         What::Show { from } => show(from).map(|()| 0),
     }
@@ -213,7 +227,11 @@ fn show(from: &Path) -> Result<(), Failure> {
     let seen = captures(&std::fs::read_to_string(from).doing(reading)?).doing(reading)?;
 
     let shells: HashSet<usize> = seen.iter().map(|capture| capture.shell.nth).collect();
-    println!("{} snapshots from {} shells\n", seen.len(), shells.len());
+    println!(
+        "{} snapshots from {} shells\n",
+        seen.len(),
+        shells.len()
+    );
 
     for (at, capture) in seen.iter().enumerate() {
         println!("[{at}] {capture}");

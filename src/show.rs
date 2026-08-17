@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use super::{Capture, Variable, Value};
+use super::{Capture, Value, Variable};
 use bash_interop::rig::{Doing, Failure};
 use bash_strings::{emit_assoc, emit_indexed, emit_scalar};
 
@@ -31,7 +31,11 @@ impl fmt::Display for Value {
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let attrs = if self.attrs.is_empty() { "--" } else { &self.attrs };
+        let attrs = if self.attrs.is_empty() {
+            "--"
+        } else {
+            &self.attrs
+        };
 
         write!(f, "[{attrs}] {}", self.value)
     }
@@ -55,7 +59,11 @@ impl fmt::Display for Capture {
             writeln!(f, "    var   {name} {var}")?;
         }
         if !self.snapshot.rematch.is_empty() {
-            writeln!(f, "    regex {}", self.snapshot.rematch.join(" | "))?;
+            writeln!(
+                f,
+                "    regex {}",
+                self.snapshot.rematch.join(" | ")
+            )?;
         }
         Ok(())
     }

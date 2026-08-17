@@ -9,26 +9,27 @@
 //! | [`writing`] | the JSON line a run writes, and reading it back |
 //! | [`shipped`] | what the injected bash may not do to a shell |
 
+mod shipped;
 mod snapshot;
 mod tracing;
-mod shipped;
 mod writing;
 
 use std::sync::Arc;
 
-use bash_interop::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Provision, Reacting, Rig, Shell,
-};
+use bash_interop::rig::{Answer, Doing, Driving, Failure, Layout, Message, Provision, Reacting, Rig, Shell};
 
-use crate::{instrument, Capture, Tracing};
-use bash_interop::scratch::{bash, Scripts};
+use crate::{Capture, Tracing, instrument};
+use bash_interop::scratch::{Scripts, bash};
 
 /// A subject script under the strict options a shipped one has — `set -u`
 /// is the option that reaches furthest into the tool, every name the
 /// instrument reads having to be one it set. The words arrive through the
 /// session, like any subject's.
 pub(super) fn script(body: &str) -> Scripts {
-    Scripts::of(&[(ENTRY, &format!("set -euo pipefail\n{body}"))])
+    Scripts::of(&[(
+        ENTRY,
+        &format!("set -euo pipefail\n{body}"),
+    )])
 }
 
 /// Every script these tests build starts here.
@@ -51,7 +52,10 @@ impl Rig for Decoding {
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Decoded, Failure> {
-        Ok(Decoded { shell, seen: Vec::new() })
+        Ok(Decoded {
+            shell,
+            seen: Vec::new(),
+        })
     }
 }
 
@@ -63,7 +67,8 @@ impl Reacting for Decoded {
             return Ok(());
         };
 
-        self.seen.push(capture.doing(|| format!("a snapshot from pid {}", self.shell.pid))?);
+        self.seen
+            .push(capture.doing(|| format!("a snapshot from pid {}", self.shell.pid))?);
 
         Ok(())
     }
@@ -85,7 +90,11 @@ impl Driving for Decoding {}
 async fn capture(body: &str) -> Vec<Capture> {
     let scripts = script(body);
     let ran = Decoding
-        .run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
+        .run(&bash(scripts.at(ENTRY)), |at| {
+            Ok(vec![at.bash_env(
+                Provision::Joining(&crate::joining(at)),
+            )?])
+        })
         .await
         .unwrap()
         .whole()

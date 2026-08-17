@@ -3,11 +3,11 @@
 
 use std::path::Path;
 
+use crate::{BashCap, captures};
 use bash_interop::rig::{Driving, Provision};
-use crate::{captures, BashCap};
 use bash_interop::scratch::bash;
 
-use super::{capture, script, ENTRY};
+use super::{ENTRY, capture, script};
 
 #[tokio::test]
 async fn call_arguments_arrive_where_the_shell_was_recording_them() {
@@ -19,7 +19,11 @@ async fn call_arguments_arrive_where_the_shell_was_recording_them() {
 
     let bare = capture(body).await;
     assert!(
-        bare[0].snapshot.stack.frames().all(|frame| frame.args.is_none()),
+        bare[0]
+            .snapshot
+            .stack
+            .frames()
+            .all(|frame| frame.args.is_none()),
         "an ordinary shell records none, and says so"
     );
 
@@ -34,7 +38,14 @@ async fn call_arguments_arrive_where_the_shell_was_recording_them() {
     // The two instrument frames are not reported, but their own arguments
     // still sit in the flat `BASH_ARGV` stack; miscounting them would shift
     // every frame's group.
-    assert_eq!(called, [["d one", "d\ntwo"].as_slice(), ["m one"].as_slice(), [].as_slice()]);
+    assert_eq!(
+        called,
+        [
+            ["d one", "d\ntwo"].as_slice(),
+            ["m one"].as_slice(),
+            [].as_slice()
+        ]
+    );
 
     let shown = traced[0].snapshot.stack.top().to_string();
     assert!(
@@ -62,25 +73,43 @@ async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
     .unwrap();
 
     let ran = async |tool: BashCap, into: &Path| {
-        tool.run(&bash(scripts.at(ENTRY)), |at| Ok(vec![at.bash_env(Provision::Joining(&crate::joining(at)))?]))
-            .await
-            .unwrap()
-            .whole()
-            .unwrap();
+        tool.run(&bash(scripts.at(ENTRY)), |at| {
+            Ok(vec![at.bash_env(
+                Provision::Joining(&crate::joining(at)),
+            )?])
+        })
+        .await
+        .unwrap()
+        .whole()
+        .unwrap();
 
         captures(&std::fs::read_to_string(into).unwrap()).unwrap()
     };
 
     let plain = scripts.at("plain.jsonl");
-    let bare = ran(BashCap::writing(&plain).unwrap(), &plain).await;
-    assert_eq!(bare.len(), 2, "one snapshot from each shell");
+    let bare = ran(
+        BashCap::writing(&plain).unwrap(),
+        &plain,
+    )
+    .await;
+    assert_eq!(
+        bare.len(),
+        2,
+        "one snapshot from each shell"
+    );
     assert!(
-        bare.iter().flat_map(|seen| seen.snapshot.stack.frames()).all(|frame| frame.args.is_none()),
+        bare.iter()
+            .flat_map(|seen| seen.snapshot.stack.frames())
+            .all(|frame| frame.args.is_none()),
         "nothing records call arguments unless the tool is asked to"
     );
 
     let full = scripts.at("traced.jsonl");
-    let traced = ran(BashCap::writing(&full).unwrap().tracing_calls(), &full).await;
+    let traced = ran(
+        BashCap::writing(&full).unwrap().tracing_calls(),
+        &full,
+    )
+    .await;
     let called: Vec<Vec<&[String]>> = traced
         .iter()
         .map(|seen| {
@@ -100,5 +129,8 @@ async fn the_tools_switch_traces_a_subject_that_never_asked_for_it() {
         ],
         "the switch reached the child process too"
     );
-    assert_ne!(traced[0].shell.pid, traced[1].shell.pid, "two shells, not one");
+    assert_ne!(
+        traced[0].shell.pid, traced[1].shell.pid,
+        "two shells, not one"
+    );
 }

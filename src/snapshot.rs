@@ -6,7 +6,7 @@ use std::sync::Arc;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use bash_interop::rig::{field, Doing, Failure, Message, Shell, Stamp};
+use bash_interop::rig::{Doing, Failure, Message, Shell, Stamp, field};
 use bash_interop::stack::{Columns, Stack};
 use bash_strings::{parse_array, parse_assoc, parse_indexed, parse_scalar};
 
@@ -29,17 +29,16 @@ mod sparse {
     use indexmap::IndexMap;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    pub fn serialize<S: Serializer>(
-        items: &IndexMap<usize, String>,
-        into: S,
-    ) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(items: &IndexMap<usize, String>, into: S) -> Result<S::Ok, S::Error> {
         items.iter().collect::<Vec<_>>().serialize(into)
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(
-        from: D,
-    ) -> Result<IndexMap<usize, String>, D::Error> {
-        Ok(Vec::<(usize, String)>::deserialize(from)?.into_iter().collect())
+    pub fn deserialize<'de, D: Deserializer<'de>>(from: D) -> Result<IndexMap<usize, String>, D::Error> {
+        Ok(
+            Vec::<(usize, String)>::deserialize(from)?
+                .into_iter()
+                .collect(),
+        )
     }
 }
 
@@ -82,11 +81,13 @@ impl Capture {
     pub fn of(message: &Message, shell: &Arc<Shell>) -> Option<Result<Self, Failure>> {
         let sections = message.behind(TAG)?;
 
-        Some(Snapshot::decode(sections, shell).map(|snapshot| Self {
-            shell: Arc::clone(shell),
-            stamp: message.stamp,
-            snapshot,
-        }))
+        Some(
+            Snapshot::decode(sections, shell).map(|snapshot| Self {
+                shell: Arc::clone(shell),
+                stamp: message.stamp,
+                snapshot,
+            }),
+        )
     }
 }
 
@@ -117,7 +118,10 @@ impl Snapshot {
 // ── the sections a message carries ───────────────────────────────────
 
 fn reading(key: &str, cause: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Failure {
-    Failure::new(format!("reading the {key:?} section"), cause)
+    Failure::new(
+        format!("reading the {key:?} section"),
+        cause,
+    )
 }
 
 /// One section, as the array literal it is written as.
@@ -148,15 +152,23 @@ impl<'a> Declaration<'a> {
 
         Some(match cursor.split_once('=') {
             Some((name, rhs)) => Self { name, attrs, rhs },
-            None => Self { name: cursor.trim(), attrs, rhs: "" },
+            None => Self {
+                name: cursor.trim(),
+                attrs,
+                rhs: "",
+            },
         })
     }
 }
 
 /// The attribute letters say which form the right-hand side is in.
 fn variable(text: &str) -> Result<(String, Variable), Failure> {
-    let Declaration { name, attrs, rhs } = Declaration::read(text)
-        .ok_or_else(|| Failure::new("reading a variable", format!("not a declaration: {text:?}")))?;
+    let Declaration { name, attrs, rhs } = Declaration::read(text).ok_or_else(|| {
+        Failure::new(
+            "reading a variable",
+            format!("not a declaration: {text:?}"),
+        )
+    })?;
     let at = || format!("reading the variable {name}");
 
     let value = if attrs.contains('A') {
@@ -167,7 +179,10 @@ fn variable(text: &str) -> Result<(String, Variable), Failure> {
         Value::Scalar(parse_scalar(rhs).doing(at)?)
     };
 
-    Ok((name.to_string(), Variable { attrs, value }))
+    Ok((
+        name.to_string(),
+        Variable { attrs, value },
+    ))
 }
 
 #[cfg(test)]
@@ -177,20 +192,36 @@ mod tests {
     #[test]
     fn declarations_decode_with_their_attributes() {
         let cases = [
-            ("s='hi there'", "s", "", Value::Scalar("hi there".into())),
+            (
+                "s='hi there'",
+                "s",
+                "",
+                Value::Scalar("hi there".into()),
+            ),
             (
                 r#"declare -a a=([0]="x" [1]="y z")"#,
                 "a",
                 "a",
-                Value::Indexed(IndexMap::from([(0, "x".into()), (1, "y z".into())])),
+                Value::Indexed(IndexMap::from([
+                    (0, "x".into()),
+                    (1, "y z".into()),
+                ])),
             ),
             (
                 r#"declare -A m=([k]="v" [k2]="v 2" )"#,
                 "m",
                 "A",
-                Value::Assoc(IndexMap::from([("k".into(), "v".into()), ("k2".into(), "v 2".into())])),
+                Value::Assoc(IndexMap::from([
+                    ("k".into(), "v".into()),
+                    ("k2".into(), "v 2".into()),
+                ])),
             ),
-            ("declare -i n='7'", "n", "i", Value::Scalar("7".into())),
+            (
+                "declare -i n='7'",
+                "n",
+                "i",
+                Value::Scalar("7".into()),
+            ),
         ];
         for (text, name, attrs, value) in cases {
             let (got_name, got) = variable(text).unwrap();
@@ -199,5 +230,4 @@ mod tests {
             assert_eq!(got.value, value, "{text}");
         }
     }
-
 }

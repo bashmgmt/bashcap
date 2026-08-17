@@ -12,13 +12,11 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use bash_interop::rig::{
-    Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell,
-};
+use bash_interop::rig::{Answer, Doing, Driving, Failure, Layout, Message, Reacting, Rig, Serving, Shell};
 
-pub use instrument::{instrument, joining, Tracing};
+pub use instrument::{Tracing, instrument, joining};
 pub use show::captures;
-pub use snapshot::{Capture, Variable, Snapshot, Value};
+pub use snapshot::{Capture, Snapshot, Value, Variable};
 
 #[cfg(test)]
 mod tests;
@@ -43,7 +41,11 @@ impl BashCap {
         let file = File::create(&into).doing(|| format!("writing {}", into.display()))?;
         let sink = Rc::new(RefCell::new(BufWriter::new(file)));
 
-        Ok(Self { into, sink, tracing: Tracing::Off })
+        Ok(Self {
+            into,
+            sink,
+            tracing: Tracing::Off,
+        })
     }
 
     /// Ask the subject's shells to record what each call was passed. This
@@ -67,7 +69,12 @@ impl Rig for BashCap {
     }
 
     async fn joined(&self, _at: &Layout, shell: Arc<Shell>) -> Result<Capturing, Failure> {
-        Ok(Capturing { shell, into: self.into.clone(), sink: Rc::clone(&self.sink), written: 0 })
+        Ok(Capturing {
+            shell,
+            into: self.into.clone(),
+            sink: Rc::clone(&self.sink),
+            written: 0,
+        })
     }
 }
 
