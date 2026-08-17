@@ -220,7 +220,7 @@ async fn perform(what: &What) -> Result<i32, Failure> {
     }
 }
 
-/// Both the reading and the rendering are the library's, so what this prints
+/// The library does both the reading and the rendering, so what this prints
 /// and what a library caller prints are the same text.
 fn show(from: &Path) -> Result<(), Failure> {
     let reading = || format!("reading {}", from.display());

@@ -76,8 +76,8 @@ pub struct Capture {
 
 impl Capture {
     /// `None` for a message that is not one of ours; `Some(Err)` for one that is
-    /// and will not decode. Several tools may share the wire, and only the
-    /// second of those is anyone's failure.
+    /// and will not decode. Several tools may share the wire, so only the second
+    /// is a failure at all.
     pub fn of(message: &Message, shell: &Arc<Shell>) -> Option<Result<Self, Failure>> {
         let sections = message.behind(TAG)?;
 
