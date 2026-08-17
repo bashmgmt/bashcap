@@ -32,7 +32,7 @@ the same `Capture` struct:
 | `run` | the tool, from the command line it was given | `BASHCAP_SESSION` in the environment always; `--reach bash-env` (the default) also `BASH_ENV`, so the whole process tree joins; `--reach by-hand` leaves it to the scripts | the subject's |
 | `serve` | a bash script, which named and made the workspace (`--at`, required, existing) and started this process as a coprocess | its own choice — the workspace is the address; the join fifo in it says the session is up, and the script sources the laid files and initiates by the same dir (`BASHCAP_INIT`) | its own: 0, or 1 if the capture did not come out |
 
-`--verbose` goes to stderr in both roles, and stdout stays the subject's own.
+`--verbose` goes to stderr in both roles, and stdout is left to the subject.
 `--trace-calls` behaves differently by where it is sourced: through `BASH_ENV`
 it arms itself before the subject's first line, and into a shell already
 running, by hand or under `serve`, it installs a `DEBUG` trap there, replacing
@@ -102,7 +102,7 @@ __bc_capture() {
 }
 ```
 
-The frame walk is not bashcap's. `__bc_stack` is shared with every tool that
+The frame walk does not belong to bashcap. `__bc_stack` is shared with every tool that
 reports a stack and contributes six sections of its own
 ([bash-interop: stack](https://bashmgmt.github.io/bash-interop/stack.html)). Each section here is an array literal, read
 back with `parse_array`.
@@ -113,7 +113,7 @@ were said once when the shell joined ([bash-interop: shell](https://bashmgmt.git
 among them. A snapshot repeating any of those would be a second source for one
 fact.
 
-Two details in the bash are worth knowing.
+Two details in the bash need explaining.
 
 ```bash
 local IFS=' '
@@ -121,8 +121,8 @@ local IFS=' '
 
 Function-scoped, because the sections above are joined with `[*]`, and a
 client that had set `IFS` would otherwise collapse each one into a single word.
-The envelope is safe without it, since `__bc_send` uses `printf`, but these
-nested joins are bashcap's own.
+The envelope is safe without it, since `__bc_send` uses `printf`, but bashcap
+does these nested joins itself.
 
 ```bash
 declare -n __bc_ref="$__bc_name"
@@ -337,8 +337,8 @@ that calls `run`. Four properties make it a transparent wrapper.
 subject unless `--verbose` is passed. The first plain word ends bashcap's
 options, so `bashcap run --into out build.bash --into elsewhere` passes
 `--into elsewhere` to the script; an unknown flag before that point is an
-error, and `--` takes a wrapped command that starts with a dash. The exit code
-is the subject's, through `ExitStatus::shell_code()`.
+error, and `--` takes a wrapped command that starts with a dash. The subject's
+exit code is passed straight through, via `ExitStatus::shell_code()`.
 
 ## Playground
 

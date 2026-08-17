@@ -41,8 +41,14 @@ takes the same flags and then runs a command, for wrapping a call rather than
 marking a point. `--trace-calls` records the shell's own function calls
 alongside the marked ones.
 
-Both words are shell functions that do nothing when no session is present, so
-a script carrying them runs the same way outside the tool.
+A call site makes bashcap a dependency of the script that says it. Outside a
+session the word is a command that does not exist, loudly, rather than a
+capture that silently goes nowhere. A script that must also run without the
+tool defines the word itself, in one line:
+
+```bash
+declare -F BASHCAP >/dev/null || BASHCAP() { :; }
+```
 
 ## Reaching a session
 
